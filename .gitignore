@@ -1,0 +1,66 @@
+# General
+.DS_Store
+*.log
+*.tmp
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+dist/
+build/
+local_settings.py
+instance/
+*.sqlite3
+*.db3
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json # We might use this later, but good to ignore if using yarn.lock or pnpm-lock.yaml
+pnpm-lock.yaml # If using pnpm, otherwise can be removed
+yarn.lock # If using yarn, otherwise can be removed
+build/
+dist/
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+coverage/
+
+# IDE/Editor specific
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sublime-project
+*.sublime-workspace
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
