@@ -1,0 +1,18 @@
+// frontend/tsconfig.app.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true, // This is a common option for tsconfig.app.json
+    // Add baseUrl and paths here again as per Shadcn's specific instructions
+    // for IDEs, even if it seems redundant with the main tsconfig.json
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+    // Add any other options that specifically need to be different for the app build
+    // compared to the base tsconfig.json or tsconfig.node.json.
+    // For example, if Vite's template had specific overrides here, keep them.
+    // If not, this can be quite minimal.
+  },
+  "include": ["src"] // This is important: defines the scope for this config part.
+}

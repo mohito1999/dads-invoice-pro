@@ -175,7 +175,6 @@ async def update_existing_invoice(
         db=db, 
         db_invoice=db_invoice, 
         invoice_in=invoice_in,
-        new_line_items_data=invoice_in.line_items # Pass line_items if present in payload
     )
     return updated_invoice
 
