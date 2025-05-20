@@ -5,6 +5,7 @@ from .organization import Organization
 from .user import User
 from .customer import Customer
 from .item import Item
+from .invoice import Invoice, InvoiceItem
 # from .customer import Customer
 # from .item import Item
 # from .invoice import Invoice

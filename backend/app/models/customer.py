@@ -31,11 +31,11 @@ class Customer(Base):
     organization = relationship("Organization", back_populates="customers")
 
     # Relationship to Invoices: A customer can have multiple invoices
-    # invoices = relationship(
-    #     "Invoice",
-    #     back_populates="customer",
-    #     cascade="all, delete-orphan" # If a customer is deleted, their invoices are also deleted
-    # )
+    invoices = relationship(
+        "Invoice",
+        back_populates="customer",
+        cascade="all, delete-orphan" # If a customer is deleted, their invoices are also deleted
+    )
 
     def __repr__(self):
         return f"<Customer(id={self.id}, company_name='{self.company_name}')>"

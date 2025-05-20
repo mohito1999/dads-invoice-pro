@@ -24,6 +24,7 @@ class Item(Base):
     
     # Relationship to Organization: An item belongs to one organization
     organization = relationship("Organization", back_populates="items")
+    
 
     # Relationship to InvoiceItems: An item can be part of many invoice line items
     # We'll define InvoiceItem model later. It will link back here.

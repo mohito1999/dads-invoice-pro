@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 # from sqlalchemy.orm import selectinload # For eager loading related data if needed later
 import uuid
+from pydantic import HttpUrl
 
 from app.models.organization import Organization as OrganizationModel
 from app.models.user import User as UserModel # Import User model
@@ -46,6 +47,10 @@ async def create_organization(
     # Pydantic v2: db_obj_data = org_in.model_dump(exclude_unset=True)
     # Pydantic v1: db_obj_data = org_in.dict(exclude_unset=True)
     db_obj_data = org_in.model_dump(exclude_unset=True)
+
+    if 'logo_url' in db_obj_data and isinstance(db_obj_data['logo_url'], HttpUrl):
+        db_obj_data['logo_url'] = str(db_obj_data['logo_url'])
+
     db_obj = OrganizationModel(**db_obj_data, user_id=owner_id) # <--- SET user_id here
 
     db.add(db_obj)
@@ -66,7 +71,10 @@ async def update_organization(
     update_data = obj_in.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
-        setattr(db_obj, field, value)
+        if isinstance(value, HttpUrl): # Check if the value is an HttpUrl instance
+            setattr(db_obj, field, str(value)) # Convert it to string
+        else:
+            setattr(db_obj, field, value)
 
     db.add(db_obj) # or await db.merge(db_obj) if db_obj could be detached
     await db.commit()

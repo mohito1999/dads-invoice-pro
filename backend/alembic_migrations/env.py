@@ -24,6 +24,7 @@ from app.models import organization # Or more specifically: from app.models.orga
 from app.models import user
 from app.models import customer
 from app.models import item
+from app.models import invoice
 # Add other model imports as you create them, e.g.:
 # from app.models.user import User # Example: from app.models.user import User
 # from app.models.item import Item
