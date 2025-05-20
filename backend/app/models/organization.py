@@ -37,6 +37,12 @@ class Organization(Base):
         cascade="all, delete-orphan" # If an org is deleted, its customers are also deleted
     )
     # --- END CUSTOMERS RELATIONSHIP ---
+    items = relationship(
+        "Item",
+        back_populates="organization", # Must match 'organization' in Item model
+        cascade="all, delete-orphan" # If an org is deleted, its items are also deleted
+    )
+
 
 
     def __repr__(self):
