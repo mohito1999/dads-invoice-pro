@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine  # Using PostgreSQL version 15, alpine for a smaller image
+    container_name: dads_invoice_pro_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-invoice_user} # Default if not set in .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword123} # Default if not set in .env
+      POSTGRES_DB: ${POSTGRES_DB:-dads_invoice_db}    # Default if not set in .env
+    ports:
+      - "${POSTGRES_PORT:-5435}:5432" # Map host port (default 5435) to container port 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - invoice_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data: # This named volume will persist data even if the container is removed
+
+networks:
+  invoice_network:
+    driver: bridge
