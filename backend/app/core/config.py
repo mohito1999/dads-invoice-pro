@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     TWILIO_WHATSAPP_NUMBER: Optional[str] = None
     RECIPIENT_WHATSAPP_NUMBER: Optional[str] = None
 
+    # --- NEW SECURITY SETTINGS ---
+    SECRET_KEY: str = "a_very_secret_key_that_should_be_strong_and_from_env" # CHANGE THIS IN .ENV
+    # Algorithm for signing JWTs (HS256 is common)
+    ALGORITHM: str = "HS256"
+    # Access token expiration time in minutes
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days for convenience, adjust as needed
+
+    # --- END NEW SECURITY SETTINGS ---
+
     model_config = SettingsConfigDict(
         # Corrected path: four .parent calls to get to project root
         env_file=Path(__file__).resolve().parent.parent.parent.parent / ".env",
