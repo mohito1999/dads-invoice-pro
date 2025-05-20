@@ -249,3 +249,38 @@ async def download_invoice_pdf(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
         # Use "inline" instead of "attachment" if you want browser to display it directly
     )
+
+@router.post("/{invoice_id}/transform-to-commercial", response_model=schemas.Invoice)
+async def transform_invoice_to_commercial(
+    invoice_id: uuid.UUID,
+    *,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+    # Optionally allow providing a new invoice number for the commercial version
+    new_invoice_number: Optional[str] = Query(None, description="Optional new invoice number for the commercial invoice.")
+) -> Any:
+    """
+    Transforms a Pro Forma invoice into a new Commercial invoice.
+    The original Pro Forma invoice remains unchanged.
+    """
+    pro_forma_invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
+    if not pro_forma_invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pro Forma Invoice not found")
+    if pro_forma_invoice.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions for this invoice")
+    if pro_forma_invoice.invoice_type != schemas.InvoiceTypeEnum.PRO_FORMA:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only Pro Forma invoices can be transformed."
+        )
+
+    try:
+        commercial_invoice = await crud.invoice.transform_pro_forma_to_commercial(
+            db=db,
+            pro_forma_invoice=pro_forma_invoice,
+            new_invoice_number=new_invoice_number
+        )
+    except ValueError as e: # Catch specific errors from CRUD if any
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        
+    return commercial_invoice

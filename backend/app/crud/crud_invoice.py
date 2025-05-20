@@ -1,27 +1,39 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, or_ # For complex filtering
-from sqlalchemy.orm import selectinload, joinedload, Session # Session for sync delete
+from sqlalchemy.orm import selectinload, joinedload # Session for sync delete is not used here
 import uuid
 from datetime import date
 from typing import List, Tuple, Optional # Ensure Optional is imported
 
 from app.models.invoice import Invoice as InvoiceModel, InvoiceItem as InvoiceItemModel
 from app.models.customer import Customer as CustomerModel # For fetching customer name
-from app.schemas.invoice import InvoiceCreate, InvoiceUpdate, InvoiceItemCreate, InvoiceStatusEnum, PricePerTypeEnum, InvoiceItemUpdate
+# Ensure all necessary enums and schemas are imported
+from app.schemas.invoice import (
+    InvoiceCreate,
+    InvoiceUpdate,
+    InvoiceItemCreate,
+    InvoiceStatusEnum,
+    PricePerTypeEnum, # Crucial for the fix
+    InvoiceItemUpdate,
+    InvoiceTypeEnum
+)
 
-# Helper function to calculate invoice totals
+# Helper function to calculate a single line item's total
 def _calculate_line_item_total(item_data: InvoiceItemCreate) -> float:
     """Helper to calculate a single line item's total."""
     quantity = 0
+    # Access enum by its value if comparing against strings, or compare enum instances directly
+    # Assuming item_data.price_per_type is already the correct enum member from Pydantic validation
     if item_data.price_per_type == PricePerTypeEnum.CARTON and item_data.quantity_cartons is not None:
         quantity = item_data.quantity_cartons
     elif item_data.quantity_units is not None: # Default to units if not carton or if carton qty not given
         quantity = item_data.quantity_units
-    # If both are None, quantity remains 0, line_total will be 0. Price must be positive if set.
+    # If both are None, quantity remains 0, line_total will be 0.
     
     return (item_data.price or 0.0) * quantity
 
+# Helper function to calculate invoice totals
 def calculate_invoice_financials(
     line_items_data: List[InvoiceItemCreate], 
     invoice_currency: str, 
@@ -55,14 +67,14 @@ def calculate_invoice_financials(
 
 async def get_invoice(db: AsyncSession, invoice_id: uuid.UUID) -> Optional[InvoiceModel]:
     """
-    Get a single invoice by its ID, eagerly loading line items and customer.
+    Get a single invoice by its ID, eagerly loading line items, customer, and organization.
     """
     result = await db.execute(
         select(InvoiceModel)
         .options(
             selectinload(InvoiceModel.line_items), 
             joinedload(InvoiceModel.customer),
-            joinedload(InvoiceModel.organization)     
+            joinedload(InvoiceModel.organization) # Added organization loading
         )
         .filter(InvoiceModel.id == invoice_id)
     )
@@ -126,6 +138,7 @@ async def create_invoice_with_items(
         discount_percentage=invoice_in.discount_percentage
     )
 
+    # Use status from input, default to DRAFT if not provided (handled by Pydantic default in schema)
     final_status = invoice_in.status
 
     db_invoice = InvoiceModel(
@@ -138,138 +151,156 @@ async def create_invoice_with_items(
         status=final_status
     )
     db.add(db_invoice)
-    # Flush to get db_invoice.id if not already available for relationship linking below,
-    # or rely on SQLAlchemy to handle it during commit if db_item.invoice is set.
-    # await db.flush([db_invoice]) # Optional: flush to get ID if needed immediately
 
     for item_data in invoice_in.line_items:
         item_line_total = _calculate_line_item_total(item_data)
-        db_item_data = item_data.model_dump()
+        # item_data is already InvoiceItemCreate, so model_dump is fine
+        db_item_data_dict = item_data.model_dump()
         db_item = InvoiceItemModel(
-            **db_item_data,
+            **db_item_data_dict,
             line_total=item_line_total
-            # invoice_id=db_invoice.id # Will be set if db_invoice is flushed or via relationship
         )
         db_item.invoice = db_invoice # Establish the relationship
         db.add(db_item)
 
     await db.commit()
-    # await db.refresh(db_invoice, attribute_names=['line_items']) # Refresh with line_items
     
-    # Re-fetch the invoice to ensure all relationships (like line_items) are loaded
-    # as defined in the get_invoice function (which uses selectinload).
     refreshed_invoice = await get_invoice(db, invoice_id=db_invoice.id)
-    if refreshed_invoice is None: # Should not happen if commit was successful
+    if refreshed_invoice is None: 
         raise Exception("Failed to retrieve created invoice after commit.")
     return refreshed_invoice
 
 
 async def update_invoice_with_items(
     db: AsyncSession, *, db_invoice: InvoiceModel, invoice_in: InvoiceUpdate,
-    new_line_items_data: Optional[List[InvoiceItemCreate]] = None # For full replacement
+    new_line_items_data: Optional[List[InvoiceItemCreate]] = None
 ) -> InvoiceModel:
     """
     Update an existing invoice.
     - Updates invoice header fields.
-    - If 'new_line_items_data' is provided, replaces all existing line items.
+    - If 'new_line_items_data' is provided (or if invoice_in.line_items is set), replaces all existing line items.
+    - Handles status and amount_paid consistency.
     """
-    # Ensure existing line items are loaded for deletion and recalculation
-    # This relies on db_invoice (passed in) having its line_items loaded,
-    # typically ensured by how get_invoice (which uses selectinload) fetches it.
-    if not hasattr(db_invoice, 'line_items') or not db_invoice.line_items:
-        # If not loaded, explicitly load them
+    # Determine if line items are being replaced (either by dedicated param or from invoice_in schema)
+    line_items_to_process = new_line_items_data if new_line_items_data is not None else invoice_in.line_items
+
+    # Ensure existing line items are loaded if we need to access them or clear them
+    # This is crucial if we clear the collection db_invoice.line_items.clear()
+    if not hasattr(db_invoice, 'line_items') or (line_items_to_process is not None and not db_invoice.line_items):
         await db.refresh(db_invoice, attribute_names=['line_items'])
 
-    update_data = invoice_in.model_dump(exclude_unset=True) # Get all update fields
+    update_data = invoice_in.model_dump(exclude_unset=True)
     
-    # Update header fields
+    original_status = db_invoice.status
+    # original_total_amount = db_invoice.total_amount # Store if needed for complex logic
+
+    # Apply header field updates from invoice_in
     for field, value in update_data.items():
-        if field != "line_items": # line_items handled separately if new_line_items_data is given
+        if field not in ["line_items", "amount_paid", "status"]: # Handle these specially
             setattr(db_invoice, field, value)
 
-    # Handle line item replacement if new_line_items_data is provided
-    if new_line_items_data is not None:
-        # 1. Delete old line items. Iterate over a copy if modifying the collection.
-        # Using db.delete and relying on cascade might be cleaner for bulk operations.
-        # Here, explicit delete and clearing the collection.
-        # This makes sure that even if cascade isn't perfectly set up, they are gone.
-        
-        # Efficiently delete existing items associated with this invoice
-        # This direct delete avoids iterating and deleting one by one if cascade is not used
-        # or if we want to be very explicit.
-        # However, SQLAlchemy's ORM cascade="all, delete-orphan" on the relationship
-        # should handle this if we just clear the collection and add new ones.
-        
-        # Let's rely on "delete-orphan" cascade.
-        # Fetch existing line items (if not already loaded and up-to-date)
-        # This ensures we are working with the current state.
-        await db.refresh(db_invoice, ['line_items'])
-        
+    # Handle line item replacement if line_items_to_process is provided
+    if line_items_to_process is not None: # Check if a list (even empty) was explicitly passed
         # Clear the existing collection. SQLAlchemy with delete-orphan will mark them for deletion.
-        db_invoice.line_items.clear()
-        # For immediate deletion in DB before adding new ones, could flush here:
-        # await db.flush()
+        # Ensure line_items were loaded before clearing if db_invoice wasn't just fetched with them.
+        await db.refresh(db_invoice, ['line_items']) # Refresh to be sure
+        db_invoice.line_items.clear() 
+        # await db.flush() # Optional: For immediate DB effect before adding new ones
 
-        # 2. Add new line items
-        for item_data in new_line_items_data:
-            item_line_total = _calculate_line_item_total(item_data)
-            db_item_data = item_data.model_dump()
+        for item_data_schema in line_items_to_process: # These are InvoiceItemCreate schemas
+            item_line_total = _calculate_line_item_total(item_data_schema)
+            # item_data_schema is already a Pydantic model, so model_dump() is fine
+            db_item_data_dict = item_data_schema.model_dump() 
             new_db_item = InvoiceItemModel(
-                **db_item_data,
+                **db_item_data_dict,
                 line_total=item_line_total
-                # invoice_id=db_invoice.id # Handled by relationship
             )
             new_db_item.invoice = db_invoice # Link to parent
-            db_invoice.line_items.append(new_db_item) # Add to collection
-            # db.add(new_db_item) # Adding through collection is often enough if cascade is set
+            db_invoice.line_items.append(new_db_item)
+    
+    # Always recalculate financials
+    # current_line_items_for_calc needs to be a list of objects that _calculate_line_item_total expects
+    # (i.e., objects with price, price_per_type, quantity_units, quantity_cartons attributes)
+    # db_invoice.line_items now contains the ORM models (either old or newly appended ones)
+    
+    # Re-construct list of Pydantic schemas from ORM models for calculator
+    current_line_items_for_calc_schemas: List[InvoiceItemCreate] = []
+    if db_invoice.line_items: # If there are any line items (old or new)
+        for orm_item in db_invoice.line_items:
+            # Convert ORM 'price_per_type' (which is an Enum instance) to its string value
+            # for InvoiceItemCreate schema validation.
+            price_per_type_value = orm_item.price_per_type.value \
+                if isinstance(orm_item.price_per_type, PricePerTypeEnum) \
+                else str(orm_item.price_per_type) # Fallback if it's somehow already a string
 
-    # Always recalculate financials after any potential header or line item change
-    # For calculate_invoice_financials, we need data in InvoiceItemCreate format.
-    # Convert current ORM line items (which might be new or existing) to schemas.
-    current_line_items_for_calc: List[InvoiceItemCreate] = []
-    for orm_item in db_invoice.line_items: # These are the items that will be in the DB after commit
-        # If orm_item is newly created and not yet committed, it might not have all fields.
-        # We need to ensure the data passed to InvoiceItemCreate.model_validate is complete.
-        # A simple way is to use the data intended for the DB.
-        # This requires careful handling of item_id if it's meant to be from an existing product.
-        # For now, assume all necessary fields for InvoiceItemCreate are present on orm_item.
-        
-        # If orm_item.price_per_type is an enum, convert to str for model_validate if needed
-        price_per_type_str = orm_item.price_per_type.value if isinstance(orm_item.price_per_type, PricePerTypeEnum) else orm_item.price_per_type
-
-        current_line_items_for_calc.append(
-            InvoiceItemCreate(
-                item_description=orm_item.item_description,
-                quantity_cartons=orm_item.quantity_cartons,
-                quantity_units=orm_item.quantity_units,
-                unit_type=orm_item.unit_type,
-                price=orm_item.price,
-                price_per_type=price_per_type_str, # Use string value of enum
-                currency=orm_item.currency,
-                item_specific_comments=orm_item.item_specific_comments,
-                item_id=orm_item.item_id
+            item_data_for_schema = {
+                "item_description": orm_item.item_description,
+                "quantity_cartons": orm_item.quantity_cartons,
+                "quantity_units": orm_item.quantity_units,
+                "unit_type": orm_item.unit_type, # This is already a string from ORM
+                "price": orm_item.price,
+                "price_per_type": price_per_type_value, # Use the string value
+                "currency": orm_item.currency, # This is already a string from ORM
+                "item_specific_comments": orm_item.item_specific_comments,
+                "item_id": orm_item.item_id
+            }
+            # Use model_validate to create an InvoiceItemCreate instance.
+            # This also validates the data.
+            current_line_items_for_calc_schemas.append(
+                InvoiceItemCreate.model_validate(item_data_for_schema)
             )
-        )
-
+    
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
-        line_items_data=current_line_items_for_calc,
+        line_items_data=current_line_items_for_calc_schemas,
         invoice_currency=db_invoice.currency,
         tax_percentage=db_invoice.tax_percentage,
         discount_percentage=db_invoice.discount_percentage
     )
     db_invoice.subtotal_amount = subtotal
-    # Prioritize calculated tax/discount if percentages are set
     db_invoice.tax_amount = tax_amt if db_invoice.tax_percentage is not None else (update_data.get('tax_amount', db_invoice.tax_amount))
     db_invoice.discount_amount = discount_amt if db_invoice.discount_percentage is not None else (update_data.get('discount_amount', db_invoice.discount_amount))
     db_invoice.total_amount = total
+
+    # Handle status and amount_paid logic (as refined previously)
+    requested_amount_paid = update_data.get("amount_paid")
+    requested_status = update_data.get("status")
+
+    if requested_status is not None:
+        db_invoice.status = requested_status # Set status from input first
+        if db_invoice.status == InvoiceStatusEnum.PAID:
+            # If status is set to PAID, amount_paid becomes total_amount unless explicitly provided otherwise
+            db_invoice.amount_paid = requested_amount_paid if requested_amount_paid is not None else db_invoice.total_amount
+        elif db_invoice.status in [InvoiceStatusEnum.UNPAID, InvoiceStatusEnum.OVERDUE, InvoiceStatusEnum.CANCELLED]:
+            if original_status != InvoiceStatusEnum.PARTIALLY_PAID and requested_amount_paid is None:
+                 db_invoice.amount_paid = 0.0 # Reset only if not previously partially paid and no new amount given
+            elif requested_amount_paid is not None: # If amount_paid is given, respect it
+                 db_invoice.amount_paid = requested_amount_paid
+        elif db_invoice.status == InvoiceStatusEnum.DRAFT and requested_amount_paid is None: # Default draft to 0 paid
+            db_invoice.amount_paid = 0.0
+        # For PARTIALLY_PAID status set explicitly, client should also send amount_paid.
+        # If they only send status=PARTIALLY_PAID and no amount_paid, amount_paid remains as is or from previous logic.
+
+    # If amount_paid is explicitly provided in the update, set it.
+    # Then, if status wasn't also explicitly provided, try to infer status.
+    if requested_amount_paid is not None:
+        db_invoice.amount_paid = requested_amount_paid
+        if requested_status is None: # Only infer status if not explicitly set by client
+            if db_invoice.amount_paid >= db_invoice.total_amount and db_invoice.total_amount > 0: # Consider floating point precision
+                db_invoice.status = InvoiceStatusEnum.PAID
+            elif db_invoice.amount_paid > 0 and db_invoice.amount_paid < db_invoice.total_amount:
+                db_invoice.status = InvoiceStatusEnum.PARTIALLY_PAID
+            elif db_invoice.amount_paid <= 0:
+                # Avoid changing a DRAFT/CANCELLED status to UNPAID just because amount_paid became 0.
+                # If it was UNPAID or OVERDUE, it remains so. If it was PAID/PARTIALLY_PAID, it becomes UNPAID.
+                if db_invoice.status not in [InvoiceStatusEnum.DRAFT, InvoiceStatusEnum.CANCELLED]:
+                    db_invoice.status = InvoiceStatusEnum.UNPAID
     
-    db.add(db_invoice) # Ensure invoice itself is added to session for updates
+    db.add(db_invoice) # Ensure invoice itself is marked for update
     await db.commit()
-    # await db.refresh(db_invoice, attribute_names=['line_items'])
     
-    refreshed_invoice = await get_invoice(db, invoice_id=db_invoice.id)
+    refreshed_invoice = await get_invoice(db, invoice_id=db_invoice.id) # Re-fetch with eager loads
     if refreshed_invoice is None:
-        raise Exception("Failed to retrieve updated invoice after commit.")
+        raise Exception(f"Failed to retrieve updated invoice (ID: {db_invoice.id}) after commit.")
     return refreshed_invoice
 
 
@@ -277,13 +308,11 @@ async def delete_invoice(db: AsyncSession, *, db_invoice: InvoiceModel) -> Invoi
     """
     Delete an invoice (which also deletes its line items due to cascade if configured).
     """
-    # Ensure line items are loaded if not already, for logging or pre-delete actions if any.
-    # However, cascade delete should handle this from DB side.
     await db.delete(db_invoice)
     await db.commit()
-    return db_invoice # Return the object as it was (now detached)
+    return db_invoice
 
-# --- CRUD for Individual InvoiceItems (Example, if needed for separate endpoints) ---
+
 async def get_invoice_line_item(db: AsyncSession, invoice_item_id: uuid.UUID) -> Optional[InvoiceItemModel]:
     result = await db.execute(select(InvoiceItemModel).filter(InvoiceItemModel.id == invoice_item_id))
     return result.scalars().first()
@@ -296,22 +325,34 @@ async def add_line_item_to_invoice(
     """
     parent_invoice = await get_invoice(db, invoice_id=invoice_id)
     if not parent_invoice:
-        raise ValueError(f"Invoice with id {invoice_id} not found.") # Or appropriate exception
+        raise ValueError(f"Invoice with id {invoice_id} not found.")
 
     line_total = _calculate_line_item_total(item_in)
-    db_item = InvoiceItemModel(**item_in.model_dump(), invoice_id=invoice_id, line_total=line_total)
-    db_item.invoice = parent_invoice # Link
-    
+    # item_in is already InvoiceItemCreate, so model_dump is fine
+    db_item_data_dict = item_in.model_dump()
+    db_item = InvoiceItemModel(**db_item_data_dict, invoice_id=invoice_id, line_total=line_total)
+    # db_item.invoice = parent_invoice # Linking explicitly can also work
+
+    # Add new item to session first to be part of parent_invoice.line_items for recalculation
     db.add(db_item)
-    # No commit yet, totals need recalculation
+    await db.flush([db_item]) # Ensure db_item is in session and linked before recalculating
+    await db.refresh(parent_invoice, attribute_names=['line_items']) # Refresh parent to include new item
 
-    # Recalculate totals for the parent invoice
-    # First, get all current line items including the new one (which is in session but not DB yet)
-    all_line_items_data = [
-        InvoiceItemCreate.model_validate(li) for li in parent_invoice.line_items
-    ]
-    all_line_items_data.append(item_in) # Add the data of the new item
-
+    all_line_items_data = []
+    for li_orm in parent_invoice.line_items:
+        item_dict = {
+            "item_description": li_orm.item_description,
+            "quantity_cartons": li_orm.quantity_cartons,
+            "quantity_units": li_orm.quantity_units,
+            "unit_type": li_orm.unit_type.value if isinstance(li_orm.unit_type, enum.Enum) else li_orm.unit_type,
+            "price": li_orm.price,
+            "price_per_type": li_orm.price_per_type.value if isinstance(li_orm.price_per_type, PricePerTypeEnum) else li_orm.price_per_type,
+            "currency": li_orm.currency.value if isinstance(li_orm.currency, enum.Enum) else li_orm.currency,
+            "item_specific_comments": li_orm.item_specific_comments,
+            "item_id": li_orm.item_id
+        }
+        all_line_items_data.append(InvoiceItemCreate.model_validate(item_dict))
+    
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data,
         invoice_currency=parent_invoice.currency,
@@ -323,10 +364,10 @@ async def add_line_item_to_invoice(
     parent_invoice.discount_amount = discount_amt
     parent_invoice.total_amount = total
     
-    db.add(parent_invoice) # Add updated parent invoice to session
+    db.add(parent_invoice)
     await db.commit()
-    await db.refresh(db_item)
-    await db.refresh(parent_invoice) # Refresh parent to get updated totals and new item in collection
+    await db.refresh(db_item) # Refresh the newly added item
+    await db.refresh(parent_invoice) # Refresh parent
     return db_item
 
 async def update_invoice_line_item(
@@ -340,21 +381,41 @@ async def update_invoice_line_item(
         setattr(db_line_item, field, value)
     
     # Recalculate this line item's total
-    line_item_data_for_calc = InvoiceItemCreate.model_validate(db_line_item) # Convert ORM to schema
+    # Convert current ORM attributes of db_line_item to dict for InvoiceItemCreate validation
+    temp_item_dict_for_calc = {
+        "item_description": db_line_item.item_description,
+        "quantity_cartons": db_line_item.quantity_cartons,
+        "quantity_units": db_line_item.quantity_units,
+        "unit_type": db_line_item.unit_type.value if isinstance(db_line_item.unit_type, enum.Enum) else db_line_item.unit_type,
+        "price": db_line_item.price,
+        "price_per_type": db_line_item.price_per_type.value if isinstance(db_line_item.price_per_type, PricePerTypeEnum) else db_line_item.price_per_type,
+        "currency": db_line_item.currency.value if isinstance(db_line_item.currency, enum.Enum) else db_line_item.currency,
+        "item_specific_comments": db_line_item.item_specific_comments,
+        "item_id": db_line_item.item_id
+    }
+    line_item_data_for_calc = InvoiceItemCreate.model_validate(temp_item_dict_for_calc)
     db_line_item.line_total = _calculate_line_item_total(line_item_data_for_calc)
 
-    db.add(db_line_item)
-    # No commit yet, parent invoice totals need recalculation
+    db.add(db_line_item) # Add updated line item to session
 
     parent_invoice = await get_invoice(db, invoice_id=db_line_item.invoice_id)
-    if not parent_invoice:
+    if not parent_invoice: # Should have line_items loaded due to get_invoice
         raise ValueError("Parent invoice not found for line item.")
 
-    # Recalculate totals for the parent invoice
-    all_line_items_data = [
-        InvoiceItemCreate.model_validate(li) for li in parent_invoice.line_items
-    ]
-    # Note: parent_invoice.line_items here will include the updated db_line_item if session is managed correctly.
+    all_line_items_data = []
+    for li_orm in parent_invoice.line_items: # This will include the updated db_line_item from session
+        item_dict = {
+             "item_description": li_orm.item_description,
+            "quantity_cartons": li_orm.quantity_cartons,
+            "quantity_units": li_orm.quantity_units,
+            "unit_type": li_orm.unit_type.value if isinstance(li_orm.unit_type, enum.Enum) else li_orm.unit_type,
+            "price": li_orm.price,
+            "price_per_type": li_orm.price_per_type.value if isinstance(li_orm.price_per_type, PricePerTypeEnum) else li_orm.price_per_type,
+            "currency": li_orm.currency.value if isinstance(li_orm.currency, enum.Enum) else li_orm.currency,
+            "item_specific_comments": li_orm.item_specific_comments,
+            "item_id": li_orm.item_id
+        }
+        all_line_items_data.append(InvoiceItemCreate.model_validate(item_dict))
 
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data,
@@ -377,23 +438,34 @@ async def delete_invoice_line_item(db: AsyncSession, *, db_line_item: InvoiceIte
     """
     Deletes a single line item and recalculates parent invoice totals.
     """
-    parent_invoice_id = db_line_item.invoice_id # Get ID before deleting
+    parent_invoice_id = db_line_item.invoice_id
+    line_item_id_to_exclude = db_line_item.id # Get ID before it's deleted from session
+
     await db.delete(db_line_item)
-    # No commit yet, parent invoice totals need recalculation
-
-    parent_invoice = await get_invoice(db, invoice_id=parent_invoice_id)
+    
+    parent_invoice = await get_invoice(db, invoice_id=parent_invoice_id) # get_invoice loads line items
     if not parent_invoice:
-        # This case should be rare if FKs are in place, but good to handle
-        await db.commit() # Commit the line item deletion anyway
-        return db_line_item # Return the detached item
+        await db.commit() 
+        return db_line_item 
 
-    # Recalculate totals for the parent invoice
-    # parent_invoice.line_items will now exclude the deleted item after refresh or re-query
-    # Await db.refresh(parent_invoice, ['line_items']) # Or ensure get_invoice re-fetches cleanly
-
-    all_line_items_data = [
-        InvoiceItemCreate.model_validate(li) for li in parent_invoice.line_items if li.id != db_line_item.id
-    ] # Exclude the one being deleted
+    all_line_items_data = []
+    # After delete and before commit, the item is marked for deletion.
+    # parent_invoice.line_items might still contain it until commit if not refreshed.
+    # So, explicitly filter it out.
+    for li_orm in parent_invoice.line_items:
+        if li_orm.id != line_item_id_to_exclude: # Exclude the item being deleted
+            item_dict = {
+                "item_description": li_orm.item_description,
+                "quantity_cartons": li_orm.quantity_cartons,
+                "quantity_units": li_orm.quantity_units,
+                "unit_type": li_orm.unit_type.value if isinstance(li_orm.unit_type, enum.Enum) else li_orm.unit_type,
+                "price": li_orm.price,
+                "price_per_type": li_orm.price_per_type.value if isinstance(li_orm.price_per_type, PricePerTypeEnum) else li_orm.price_per_type,
+                "currency": li_orm.currency.value if isinstance(li_orm.currency, enum.Enum) else li_orm.currency,
+                "item_specific_comments": li_orm.item_specific_comments,
+                "item_id": li_orm.item_id
+            }
+            all_line_items_data.append(InvoiceItemCreate.model_validate(item_dict))
 
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data,
@@ -408,5 +480,69 @@ async def delete_invoice_line_item(db: AsyncSession, *, db_line_item: InvoiceIte
     
     db.add(parent_invoice)
     await db.commit()
-    # await db.refresh(parent_invoice) # No need to refresh parent if just totals changed
-    return db_line_item # Return the deleted item (now detached)
+    return db_line_item
+
+
+async def transform_pro_forma_to_commercial(
+    db: AsyncSession, *, pro_forma_invoice: InvoiceModel, new_invoice_number: Optional[str] = None
+) -> InvoiceModel:
+    """
+    Creates a new Commercial invoice based on an existing Pro Forma invoice.
+    Copies line items and relevant header data.
+    """
+    if pro_forma_invoice.invoice_type != InvoiceTypeEnum.PRO_FORMA:
+        raise ValueError("Only Pro Forma invoices can be transformed.")
+    
+    # Ensure line items are loaded for copying
+    if not pro_forma_invoice.line_items: # Pro forma might have been fetched without line_items
+        await db.refresh(pro_forma_invoice, attribute_names=['line_items'])
+
+    new_line_items_create_data: List[InvoiceItemCreate] = []
+    if pro_forma_invoice.line_items:
+        for li in pro_forma_invoice.line_items:
+            # Assuming PricePerTypeEnum needs its .value if the ORM field is an enum object
+            price_per_type_val = li.price_per_type.value if isinstance(li.price_per_type, PricePerTypeEnum) else li.price_per_type
+            unit_type_val = li.unit_type.value if isinstance(li.unit_type, enum.Enum) else li.unit_type
+            currency_val = li.currency.value if isinstance(li.currency, enum.Enum) else li.currency
+            
+            new_line_items_create_data.append(
+                InvoiceItemCreate(
+                    item_description=li.item_description,
+                    quantity_cartons=li.quantity_cartons,
+                    quantity_units=li.quantity_units,
+                    unit_type=unit_type_val,
+                    price=li.price,
+                    price_per_type=price_per_type_val,
+                    currency=currency_val,
+                    item_specific_comments=li.item_specific_comments,
+                    item_id=li.item_id # FK to product/service Item
+                )
+            )
+    
+    final_new_invoice_number = new_invoice_number or f"{pro_forma_invoice.invoice_number}-C" # Improve numbering
+
+    commercial_invoice_create_data = InvoiceCreate(
+        invoice_number=final_new_invoice_number,
+        invoice_date=date.today(), 
+        due_date=pro_forma_invoice.due_date, 
+        invoice_type=InvoiceTypeEnum.COMMERCIAL,
+        status=InvoiceStatusEnum.DRAFT, 
+        currency=pro_forma_invoice.currency,
+        organization_id=pro_forma_invoice.organization_id,
+        customer_id=pro_forma_invoice.customer_id,
+        tax_percentage=pro_forma_invoice.tax_percentage,
+        discount_percentage=pro_forma_invoice.discount_percentage,
+        comments_notes=pro_forma_invoice.comments_notes,
+        line_items=new_line_items_create_data,
+        # Exclude user_id; it's set by owner_id in create_invoice_with_items
+        # Exclude amount_paid; new commercial invoice has 0 paid initially
+        # Exclude pdf_url
+    )
+
+    new_commercial_invoice = await create_invoice_with_items(
+        db=db,
+        invoice_in=commercial_invoice_create_data,
+        owner_id=pro_forma_invoice.user_id
+    )
+    
+    return new_commercial_invoice
