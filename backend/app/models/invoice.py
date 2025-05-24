@@ -33,6 +33,12 @@ class Invoice(Base):
     comments_notes = Column(Text, nullable=True)
     pdf_url = Column(String(1024), nullable=True) # URL to generated PDF
 
+    # --- NEW OPTIONAL FIELDS for Commercial/Packing List ---
+    container_number = Column(String(100), nullable=True)
+    seal_number = Column(String(100), nullable=True)
+    hs_code = Column(String(100), nullable=True) # Harmonized System Code
+    # --- END NEW FIELDS ---
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

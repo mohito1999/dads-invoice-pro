@@ -28,7 +28,7 @@
             margin: 20mm 15mm;
 
             @top-center {
-                content: "{{ invoice.invoice_type | upper }}";
+                content: "{{ invoice.invoice_type.value | upper if invoice.invoice_type else 'INVOICE' }}";
                 font-weight: bold;
                 font-size: 16px;
                 color: var(--primary-color);
@@ -46,7 +46,7 @@
         }
 
         .container { width: 100%; }
-        .header-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-bottom: 15px; }
+        .header-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-bottom: 15px; margin-top: 10mm; }
         .header-section .logo { max-width: 180px; max-height: 80px; object-fit: contain; }
         .header-section .company-address { text-align: left; max-width: 50%; }
         .header-section .company-address h1 { font-size: 20pt; font-weight: bold; color: var(--primary-color); margin: 0 0 5px 0; }
@@ -55,7 +55,7 @@
         .invoice-meta-section { text-align: right; max-width: 45%; }
         .invoice-meta-section h2 { font-size: 18pt; font-weight: bold; color: var(--text-color); margin: 0 0 10px 0; text-transform: uppercase; }
         .invoice-meta-section p { margin: 3px 0; font-size: 10pt; }
-        .invoice-meta-section p strong { display: inline-block; min-width: 110px; font-weight: 600; }
+        .invoice-meta-section p strong { display: inline-block; min-width: 100px; font-weight: 600; }
         
         .customer-info-section { margin-bottom: 25px; padding: 15px; background-color: var(--table-row-alt-bg); border: 1px solid var(--border-color); border-radius: 4px; }
         .customer-info-section h3 { margin: 0 0 8px 0; font-size: 11pt; font-weight: bold; color: var(--primary-color); }
@@ -63,50 +63,70 @@
         .customer-info-section strong { font-weight: 600; }
         
         .items-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .items-table th, .items-table td { border: 1px solid var(--border-color); padding: 10px; text-align: left; font-size: 9.5pt; vertical-align: top; } /* Added vertical-align: top */
+        .items-table th, .items-table td { border: 1px solid var(--border-color); padding: 8px; text-align: left; font-size: 9pt; vertical-align: top; }
         .items-table th { background-color: var(--table-header-bg); color: var(--primary-color); font-weight: bold; text-transform: uppercase; }
         .items-table tbody tr:nth-child(even) { background-color: var(--table-row-alt-bg); }
         .items-table .text-right { text-align: right; }
         .items-table .text-center { text-align: center; }
-        .items-table .description-cell small { font-size: 8.5pt; color: var(--text-light-color); display: block; margin-top: 3px;} /* Made small display block */
+        .items-table .description-cell small { font-size: 8pt; color: var(--text-light-color); display: block; margin-top: 2px;}
         
-        /* --- CSS for Item Image Column --- */
         .items-table th.item-image-col, 
-        .items-table td.item-image-col { 
-            width: 7%; /* Adjust width as needed, e.g., 60px or a percentage */ 
-            text-align: center; 
-            vertical-align: middle; /* Vertically center image */
-            padding: 5px; 
-        }
-        .items-table td.item-image-col img { 
-            max-width: 50px; 
-            max-height: 50px; 
-            object-fit: contain; 
-            display: block; 
-            margin: auto; 
-            /* border: 1px solid var(--border-color); /* Optional */
-        }
-        /* --- End Item Image Column CSS --- */
+        .items-table td.item-image-col { width: 50px; text-align: center; vertical-align: middle; padding: 5px; }
+        .items-table td.item-image-col img { max-width: 40px; max-height: 40px; object-fit: contain; display: block; margin: auto; }
 
-        .totals-section { display: flex; justify-content: flex-end; margin-bottom: 25px; }
+        .totals-section { display: flex; justify-content: flex-end; margin-bottom: 20px; }
         .totals-summary { width: 45%; border: 1px solid var(--border-color); border-radius: 4px; }
         .totals-summary table { width: 100%; border-collapse: collapse; }
-        .totals-summary td { padding: 8px 10px; font-size: 10pt; border-bottom: 1px solid var(--border-color); }
+        .totals-summary td { padding: 7px 10px; font-size: 9.5pt; border-bottom: 1px solid var(--border-color); }
         .totals-summary tr:last-child td { border-bottom: none; }
         .totals-summary .label { font-weight: 500; color: var(--text-light-color); }
         .totals-summary .value { text-align: right; font-weight: bold; }
-        .totals-summary .grand-total .label, .totals-summary .grand-total .value { font-size: 12pt; color: var(--primary-color); padding-top: 10px; padding-bottom: 10px; }
+        .totals-summary .grand-total .label, .totals-summary .grand-total .value { font-size: 11pt; color: var(--primary-color); padding-top: 8px; padding-bottom: 8px; }
         .totals-summary .grand-total .value { font-weight: bold; }
         
-        .comments-section { margin-top: 30px; padding: 15px; border: 1px solid var(--border-color); background-color: var(--table-row-alt-bg); border-radius: 4px; font-size: 9.5pt; white-space: pre-wrap; }
-        .comments-section strong { display: block; margin-bottom: 5px; font-weight: bold; color: var(--primary-color); }
+        .info-block-section { /* Generic class for shipping and comments */
+            margin-top: 15px; 
+            margin-bottom: 15px; 
+            padding:12px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 4px;
+            background-color: var(--table-row-alt-bg);
+        }
+        .info-block-section h3 {
+            margin:0 0 8px 0; /* Reduced margin-bottom for h3 */
+            font-size: 10pt; 
+            font-weight: bold; 
+            color: var(--primary-color);
+        }
+        .info-block-section table { /* For simple key-value display */
+            width: 100%; 
+            font-size: 9pt;
+            border-collapse: collapse;
+        }
+        .info-block-section table td { 
+            padding: 4px 0; 
+            border: none; 
+            vertical-align: top; /* Align content to top */
+        }
+        .info-block-section table td:first-child { /* Style for labels if using two-column table */
+            width: 30%; 
+            font-weight: 500;
+            color: var(--text-light-color);
+            padding-right: 10px; /* Add some space between label and value */
+        }
+        .info-block-section .notes-content { /* Specific for comment text */
+            white-space: pre-wrap; /* Preserve line breaks */
+            line-height: 1.5; /* Adjust line height for notes */
+            font-size: 9pt;
+        }
         
-        .footer-section { margin-top: 40px; padding-top: 15px; border-top: 1px solid var(--border-color); text-align: center; font-size: 9pt; color: #777; }
-        .footer-section p { margin: 3px 0; }
+        .footer-section { margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border-color); text-align: center; font-size: 8.5pt; color: #777; }
+        .footer-section p { margin: 2px 0; }
     </style>
 </head>
 <body>
     <div class="container">
+        {# ... (Header, Customer Info, Items Table, Totals sections remain the same) ... #}
         <div class="header-section">
             <div class="company-address">
                 {% if invoice.organization.logo_url %}
@@ -128,7 +148,6 @@
                 <p><strong>Number:</strong> {{ invoice.invoice_number }}</p>
                 <p><strong>Date:</strong> {{ invoice.invoice_date.strftime('%B %d, %Y') if invoice.invoice_date else '' }}</p>
                 {% if invoice.due_date %}<p><strong>Due Date:</strong> {{ invoice.due_date.strftime('%B %d, %Y') }}</p>{% endif %}
-                <p><strong>Status:</strong> {{ invoice.status.value | title }}</p>
             </div>
         </div>
 
@@ -150,24 +169,24 @@
             <thead>
                 <tr>
                     <th style="width: 4%;" class="text-center">#</th>
-                    <th class="item-image-col" style="width: 7%;">Image</th> <!-- NEW IMAGE HEADER -->
-                    <th style="width: 29%;">Description</th> <!-- Adjusted width -->
-                    <th style="width: 8%;" class="text-center">Qty (Units)</th>
-                    <th style="width: 8%;" class="text-center">Qty (Cartons)</th>
+                    <th class="item-image-col">Image</th>
+                    <th style="width: 32%;">Description</th>
+                    <th style="width: 8%;" class="text-center">Qty (U)</th>
+                    <th style="width: 8%;" class="text-center">Qty (C)</th>
                     <th style="width: 8%;" class="text-center">Unit</th>
-                    <th style="width: 18%;" class="text-right">Unit Price</th> <!-- Adjusted width -->
-                    <th style="width: 18%;" class="text-right">Line Total</th> <!-- Adjusted width -->
+                    <th style="width: 16%;" class="text-right">Unit Price</th>
+                    <th style="width: 17%;" class="text-right">Line Total</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item_line in invoice.line_items %} {# Using item_line as loop variable #}
+                {% for item_line in invoice.line_items %}
                 <tr>
                     <td class="text-center">{{ loop.index }}</td>
-                    <td class="item-image-col"> {# <!-- NEW IMAGE CELL --> #}
+                    <td class="item-image-col">
                         {% if item_line.item and item_line.item.image_url %}
                             <img src="{{ item_line.item.image_url }}" alt="{{ item_line.item_description }}">
                         {% else %}
-                            <span>-</span> {# Placeholder like "N/A" or just empty #}
+                            <span>-</span>
                         {% endif %}
                     </td>
                     <td class="description-cell">
@@ -178,14 +197,17 @@
                     <td class="text-center">{{ item_line.quantity_cartons if item_line.quantity_cartons is not none else '-' }}</td>
                     <td class="text-center">{{ item_line.unit_type }}</td>
                     <td class="text-right">
-                        {{ "%.2f"|format(item_line.price) }} {{ item_line.currency }}
+                        {{ "%.2f"|format(item_line.price) }} 
+                        {% if item_line.currency %}{{ item_line.currency }}{% else %}{{ invoice.currency }}{% endif %}
+                        {% if item_line.price_per_type %}
                         <small style="display:block; color: #666;">per {{ item_line.price_per_type.value }}</small>
+                        {% endif %}
                     </td>
                     <td class="text-right">{{ "%.2f"|format(item_line.line_total) }} {{ invoice.currency }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" style="text-align: center; padding: 20px;">No line items on this invoice.</td> {# Increased colspan to 8 #}
+                    <td colspan="8" style="text-align: center; padding: 20px;">No line items on this invoice.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -221,24 +243,53 @@
                     </tr>
                     <tr class="grand-total balance-due">
                         <td class="label">BALANCE DUE:</td>
-                        <td class="value">{{ "%.2f"|format(invoice.total_amount - invoice.amount_paid) }} {{ invoice.currency }}</td>
+                        <td class="value">{{ "%.2f"|format(invoice.total_amount - (invoice.amount_paid or 0)) }} {{ invoice.currency }}</td>
                     </tr>
                     {% endif %}
                 </table>
             </div>
         </div>
 
-        {% if invoice.comments_notes %}
-        <div class="comments-section">
-            <strong>Comments / Notes:</strong>
-            {{ invoice.comments_notes }}
+        {% if invoice.invoice_type.value == "Commercial" and (invoice.container_number or invoice.seal_number or invoice.hs_code) %}
+        <div class="info-block-section"> {# Using generic class #}
+            <h3>Shipping Information:</h3>
+            <table>
+                {% if invoice.container_number %}
+                <tr>
+                    <td>Container Number:</td>
+                    <td>{{ invoice.container_number }}</td>
+                </tr>
+                {% endif %}
+                {% if invoice.seal_number %}
+                <tr>
+                    <td>Seal Number:</td>
+                    <td>{{ invoice.seal_number }}</td>
+                </tr>
+                {% endif %}
+                {% if invoice.hs_code %}
+                <tr>
+                    <td>H.S. Code:</td>
+                    <td>{{ invoice.hs_code }}</td>
+                </tr>
+                {% endif %}
+            </table>
         </div>
         {% endif %}
+
+        {# --- RESTRUCTURED COMMENTS SECTION --- #}
+        {% if invoice.comments_notes %}
+        <div class="info-block-section">
+            <h3>Comments / Notes:</h3>
+            <div class="notes-content">
+{{ invoice.comments_notes }} {# <--- NO leading spaces/indentation before this tag #}
+            </div>
+        </div>
+        {% endif %}
+        {# --- END RESTRUCTURED COMMENTS SECTION --- #}
         
         <div class="footer-section">
             <p>Thank you for your business!</p>
             <p>If you have any questions concerning this invoice, please contact {{ invoice.organization.name }} at {{ invoice.organization.contact_email or '[Organization Email]' }} or {{ invoice.organization.contact_phone or '[Organization Phone]' }}.</p>
-            <!-- Add bank details or other standard footer notes here -->
         </div>
     </div>
 </body>

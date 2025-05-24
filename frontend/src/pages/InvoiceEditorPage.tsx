@@ -94,7 +94,7 @@ const InvoiceEditorPage = () => {
   const [status, setStatus] = useState<InvoiceStatusEnum>(InvoiceStatusEnum.DRAFT);
   
   const [currency, setCurrency] = useState(INITIAL_CURRENCY); 
-  const [currencyInput, setCurrencyInput] = useState(INITIAL_CURRENCY); // For direct input typing
+  const [currencyInput, setCurrencyInput] = useState(INITIAL_CURRENCY); 
 
   const [taxPercentage, setTaxPercentage] = useState<string>('');
   const [discountPercentage, setDiscountPercentage] = useState<string>('');
@@ -107,14 +107,18 @@ const InvoiceEditorPage = () => {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [items, setItems] = useState<ItemSummary[]>([]);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isPageLoading, setIsPageLoading] = useState(isEditMode);
+  const [isLoading, setIsLoading] = useState(false); 
+  const [isPageLoading, setIsPageLoading] = useState(isEditMode); 
   const [error, setError] = useState<string | null>(null);
 
   const [calculatedSubtotal, setCalculatedSubtotal] = useState(0);
   const [calculatedTax, setCalculatedTax] = useState(0);
   const [calculatedDiscount, setCalculatedDiscount] = useState(0);
   const [calculatedTotal, setCalculatedTotal] = useState(0);
+
+  const [containerNumber, setContainerNumber] = useState('');
+  const [sealNumber, setSealNumber] = useState('');
+  const [hsCode, setHSCode] = useState('');
 
   // Fetch customers and items for dropdowns
   useEffect(() => {
@@ -149,10 +153,13 @@ const InvoiceEditorPage = () => {
                 setInvoiceType(inv.invoice_type);
                 setStatus(inv.status);
                 setCurrency(inv.currency); 
-                setCurrencyInput(inv.currency); // Sync currencyInput with fetched currency
+                setCurrencyInput(inv.currency);
                 setTaxPercentage(inv.tax_percentage?.toString() || '');
                 setDiscountPercentage(inv.discount_percentage?.toString() || '');
                 setCommentsNotes(inv.comments_notes || '');
+                setContainerNumber(inv.container_number || '');
+                setSealNumber(inv.seal_number || '');
+                setHSCode(inv.hs_code || '');
                 setLineItems(inv.line_items.map(li => ({
                     id: li.id,
                     _temp_id: uuidv4(),
@@ -180,13 +187,14 @@ const InvoiceEditorPage = () => {
         setInvoiceType(InvoiceTypeEnum.COMMERCIAL);
         setStatus(InvoiceStatusEnum.DRAFT);
         setCurrency(INITIAL_CURRENCY); 
-        setCurrencyInput(INITIAL_CURRENCY); // Reset currencyInput
+        setCurrencyInput(INITIAL_CURRENCY);
         setTaxPercentage('');
         setDiscountPercentage('');
         setCommentsNotes('');
-        // Initial line item is set by useState initializer if lineItems.length === 0 logic is removed from here
-        // For safety and clarity, ensure it's correctly initialized or re-initialized:
-        if (lineItems.length === 0 || !isEditMode) { // If create mode, ensure one item with current initial currency
+        setContainerNumber('');
+        setSealNumber('');
+        setHSCode('');
+        if (lineItems.length === 0 || !isEditMode) {
              setLineItems([createDefaultLineItem(INITIAL_CURRENCY)]);
         }
     }
@@ -253,7 +261,7 @@ const InvoiceEditorPage = () => {
 
   const handleMainCurrencyChange = (inputValue: string) => {
     const upperValue = inputValue.toUpperCase();
-    setCurrencyInput(upperValue); // Always update the input field's display
+    setCurrencyInput(upperValue); 
 
     if (upperValue.length === 3 && /^[A-Z]+$/.test(upperValue)) {
       setCurrency(upperValue); 
@@ -271,8 +279,6 @@ const InvoiceEditorPage = () => {
         }
     } else if (inputValue === "") {
         setCurrencyInput("");
-        // Optionally revert official currency to default or handle as error in submit
-        // setCurrency(INITIAL_CURRENCY); 
     }
   };
 
@@ -303,7 +309,7 @@ const InvoiceEditorPage = () => {
             setError("All line items must have a valid, non-negative price."); return;
         }
     }
-    if (!currency || currency.trim().length !== 3 || !/^[A-Z]+$/.test(currency)) { // Use validated 'currency' state
+    if (!currency || currency.trim().length !== 3 || !/^[A-Z]+$/.test(currency)) {
         setError("A valid 3-letter uppercase currency code is required for the invoice.");
         return;
     }
@@ -332,10 +338,13 @@ const InvoiceEditorPage = () => {
         customer_id: finalCustomerId,
         invoice_type: invoiceType,
         status: status,
-        currency: currency, // Use the validated main currency state
+        currency: currency,
         tax_percentage: taxPercentage !== '' ? parseFloat(String(taxPercentage)) : null,
         discount_percentage: discountPercentage !== '' ? parseFloat(String(discountPercentage)) : null,
         comments_notes: commentsNotes || null,
+        container_number: containerNumber || null,
+        seal_number: sealNumber || null,
+        hs_code: hsCode || null,
         line_items: finalLineItemsForAPI,
     };
     if (!isEditMode && effectiveOrgId) {
@@ -430,11 +439,11 @@ const InvoiceEditorPage = () => {
                             id="currency" 
                             value={currencyInput} 
                             onChange={e => handleMainCurrencyChange(e.target.value)} 
-                            maxLength={3} // MaxLength is a good UX hint for user
+                            maxLength={3}
                             required 
                             className="mt-1" 
                             placeholder="USD"
-                            autoComplete="off" // Attempt to disable browser autocomplete
+                            autoComplete="off"
                          />
                      </div>
                  </CardContent>
@@ -524,6 +533,44 @@ const InvoiceEditorPage = () => {
                  </CardContent>
              </Card>
 
+             {invoiceType === InvoiceTypeEnum.COMMERCIAL && ( // Check against the state variable
+                <Card>
+                    <CardHeader><CardTitle>Shipping & Customs Information</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
+                        <div>
+                            <Label htmlFor="container_number">Container Number</Label>
+                            <Input 
+                                id="container_number" 
+                                value={containerNumber} 
+                                onChange={e => setContainerNumber(e.target.value)} 
+                                className="mt-1" 
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="seal_number">Seal Number</Label>
+                            <Input 
+                                id="seal_number" 
+                                value={sealNumber} 
+                                onChange={e => setSealNumber(e.target.value)} 
+                                className="mt-1" 
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="hs_code">H.S. Code</Label>
+                            <Input 
+                                id="hs_code" 
+                                value={hsCode} 
+                                onChange={e => setHSCode(e.target.value)} 
+                                className="mt-1" 
+                                disabled={isLoading}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            )}  
+
              <Card>
                  <CardHeader><CardTitle>Summary & Notes</CardTitle></CardHeader>
                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -543,6 +590,7 @@ const InvoiceEditorPage = () => {
                          <div className="flex justify-between"><span>Discount Amount:</span> <span className="font-semibold text-destructive">-{currency} {calculatedDiscount.toFixed(2)}</span></div>
                          <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2"><span>Total:</span> <span className="font-extrabold">{currency} {calculatedTotal.toFixed(2)}</span></div>
                      </div>
+                     
                      <div className="md:col-span-2">
                          <Label htmlFor="comments_notes">Comments / Notes</Label>
                          <Textarea id="comments_notes" value={commentsNotes} onChange={e => setCommentsNotes(e.target.value)} className="mt-1" rows={3} />
