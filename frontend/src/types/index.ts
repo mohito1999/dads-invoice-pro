@@ -185,3 +185,12 @@ export interface InvoiceCreateData extends Omit<Invoice,
 export interface InvoiceUpdateData extends Partial<Omit<InvoiceCreateData, 'organization_id'>> {
     line_items?: Omit<InvoiceItemFormData, '_temp_id'>[]; // For full replacement of line items
 }
+
+export interface DashboardStats {
+    total_invoiced_amount: number;
+    total_collected_amount: number;
+    total_outstanding_amount: number;
+    count_overdue_invoices: number;
+    currency?: string | null; // Matches backend schema
+}
+  
