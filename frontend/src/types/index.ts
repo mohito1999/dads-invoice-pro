@@ -73,42 +73,38 @@ export interface Item extends ItemSummary {
 
 // --- Invoice Related Enums ---
 export enum InvoiceTypeEnum {
-    PRO_FORMA = "Pro Forma",
-    COMMERCIAL = "Commercial",
-    // PACKING_LIST = "Packing List", // Example, if you add more
+    PRO_FORMA = "PRO_FORMA",
+    COMMERCIAL = "COMMERCIAL",
+    PACKING_LIST = "PACKING_LIST",
 }
-  
+
 export enum InvoiceStatusEnum {
-    DRAFT = "Draft",
-    UNPAID = "Unpaid",
-    PAID = "Paid",
-    PARTIALLY_PAID = "Partially Paid",
-    OVERDUE = "Overdue",
-    CANCELLED = "Cancelled",
+    DRAFT = "DRAFT",
+    UNPAID = "UNPAID",
+    PAID = "PAID",
+    PARTIALLY_PAID = "PARTIALLY_PAID",
+    OVERDUE = "OVERDUE",
+    CANCELLED = "CANCELLED",
 }
-  
+
 export enum PricePerTypeEnum {
-    UNIT = "unit",
-    CARTON = "carton",
+    UNIT = "UNIT",
+    CARTON = "CARTON",
 }
   
 // --- Invoice Item Types ---
-export interface InvoiceItem { // For data coming from backend / display
-    id: string; // UUID
-    invoice_id: string; // UUID
-    item_id?: string | null; // UUID, link to a predefined item
-    item_description: string;
-    quantity_cartons?: number | null;
-    quantity_units?: number | null;
-    unit_type?: string | null;
-    price: number;
-    price_per_type: PricePerTypeEnum;
-    currency: string;
-    item_specific_comments?: string | null;
+export interface InvoiceItem extends Omit<InvoiceItemFormData, '_temp_id' | 'price' | 'quantity_cartons' | 'quantity_units' | 'net_weight_kgs' | 'gross_weight_kgs' | 'measurement_cbm'> {
+    id: string; // from DB
+    invoice_id: string;
     line_total: number;
-    // If you link the full Item object in backend for PDF/View, you might add:
-    // item?: ItemSummary | null; 
-}
+    price: number; // from DB
+    quantity_cartons?: number | null; // from DB
+    quantity_units?: number | null; // from DB
+    // --- ADD NEW FIELDS (as numbers from DB) ---
+    net_weight_kgs?: number | null;
+    gross_weight_kgs?: number | null;
+    measurement_cbm?: number | null;
+  }
   
 export interface InvoiceItemFormData { // For forms
     id?: string; // For identifying existing items during update
@@ -122,6 +118,12 @@ export interface InvoiceItemFormData { // For forms
     price_per_type: PricePerTypeEnum;
     currency: string;
     item_specific_comments?: string | null;
+
+    // --- NEW FIELDS FOR PACKING LIST ---
+    net_weight_kgs?: number | string | null;
+    gross_weight_kgs?: number | string | null;
+    measurement_cbm?: number | string | null;
+    // --- END NEW FIELDS ---
 }
   
 // --- Invoice Types ---
@@ -165,6 +167,7 @@ export interface Invoice {
     container_number?: string | null;
     seal_number?: string | null;
     hs_code?: string | null;
+    bl_number?: string | null;
     // --- END ADDED NEW FIELDS ---
 }
 

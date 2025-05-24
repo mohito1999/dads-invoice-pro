@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, ForeignKey, Float, Date, DateTime, Enum as DBEnum
+from sqlalchemy import Column, String, Text, ForeignKey, Float, Date, DateTime, Enum 
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func # For server-side default timestamps
@@ -15,10 +15,9 @@ class Invoice(Base):
     invoice_date = Column(Date, nullable=False, default=func.current_date())
     due_date = Column(Date, nullable=True)
     
-    invoice_type = Column(DBEnum(InvoiceTypeEnum, name="invoice_type_enum", create_type=False), 
-                          nullable=False, default=InvoiceTypeEnum.COMMERCIAL)
-    status = Column(DBEnum(InvoiceStatusEnum, name="invoice_status_enum", create_type=False), 
-                    nullable=False, default=InvoiceStatusEnum.DRAFT, index=True)
+    invoice_type = Column(Enum(InvoiceTypeEnum, name='invoice_type_enum', native_enum=True, create_type=False), default=InvoiceTypeEnum.COMMERCIAL, nullable=False)
+    status = Column(Enum(InvoiceStatusEnum, name='invoice_status_enum', native_enum=True, create_type=False), default=InvoiceStatusEnum.DRAFT, nullable=False)
+
     
     currency = Column(String(3), nullable=False, default="USD") # Overall invoice currency
 
@@ -38,6 +37,8 @@ class Invoice(Base):
     seal_number = Column(String(100), nullable=True)
     hs_code = Column(String(100), nullable=True) # Harmonized System Code
     # --- END NEW FIELDS ---
+
+    bl_number = Column(String(100), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -76,12 +77,26 @@ class InvoiceItem(Base):
     unit_type = Column(String(50), nullable=True, default="pieces")
     
     price = Column(Float, nullable=False)
-    price_per_type = Column(DBEnum(PricePerTypeEnum, name="price_per_type_enum", create_type=False), 
-                            nullable=False, default=PricePerTypeEnum.UNIT)
+    price_per_type = Column(
+        Enum(   
+            PricePerTypeEnum,
+            name='price_per_type_enum',
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x] # Apply to all enums
+        ),
+        nullable=False,
+        default=PricePerTypeEnum.UNIT
+    )
     currency = Column(String(3), nullable=False, default="USD")
     
     item_specific_comments = Column(Text, nullable=True)
     line_total = Column(Float, nullable=False, default=0.0) # Will be calculated
+
+    # --- NEW FIELDS FOR PACKING LIST ---
+    net_weight_kgs = Column(Float, nullable=True)
+    gross_weight_kgs = Column(Float, nullable=True)
+    measurement_cbm = Column(Float, nullable=True) # Cubic Meters
+    # --- END NEW FIELDS ---
 
     # Foreign Keys
     invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False, index=True)

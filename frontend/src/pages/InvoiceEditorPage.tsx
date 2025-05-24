@@ -27,6 +27,12 @@ const ITEM_PLACEHOLDER_VALUE = "---TYPE_MANUALLY_PLACEHOLDER---";
 // --- Initial Currency Definition ---
 const INITIAL_CURRENCY = 'USD';
 
+// --- Helper function to format enum values for display ---
+const formatEnumValueForDisplay = (enumValue: string): string => {
+    if (!enumValue) return '';
+    return enumValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
 // --- Helper function to create a default line item ---
 const createDefaultLineItem = (currentInvoiceCurrency: string): InvoiceItemFormData => ({
     _temp_id: uuidv4(),
@@ -35,8 +41,11 @@ const createDefaultLineItem = (currentInvoiceCurrency: string): InvoiceItemFormD
     quantity_units: '1',
     unit_type: 'pieces',
     price: '0',
-    price_per_type: PricePerTypeEnum.UNIT,
+    price_per_type: PricePerTypeEnum.UNIT, // Default to the enum member
     currency: currentInvoiceCurrency,
+    net_weight_kgs: '',
+    gross_weight_kgs: '',
+    measurement_cbm: '',
 });
 
 // --- Calculation Functions ---
@@ -47,10 +56,10 @@ const round = (num: number, places: number = 2): number => {
 const calculateLineItemTotal = (item: Partial<InvoiceItemFormData>): number => {
     const price = parseFloat(String(item.price)) || 0;
     let quantity = 0;
-
+    // item.price_per_type here is an enum member
     if (item.price_per_type === PricePerTypeEnum.CARTON && (item.quantity_cartons || item.quantity_cartons === 0)) {
         quantity = parseFloat(String(item.quantity_cartons)) || 0;
-    } else if (item.quantity_units || item.quantity_units === 0) {
+    } else if (item.quantity_units || item.quantity_units === 0) { // Default to units if price_per_type is UNIT or not CARTON
         quantity = parseFloat(String(item.quantity_units)) || 0;
     }
     return round(price * quantity);
@@ -85,7 +94,7 @@ const InvoiceEditorPage = () => {
 
   const isEditMode = !!invoiceId;
 
-  // Invoice Header State
+  // Invoice Header State - Enums store the enum member itself
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
   const [dueDate, setDueDate] = useState<Date | undefined>();
@@ -119,6 +128,7 @@ const InvoiceEditorPage = () => {
   const [containerNumber, setContainerNumber] = useState('');
   const [sealNumber, setSealNumber] = useState('');
   const [hsCode, setHSCode] = useState('');
+  const [blNumber, setBlNumber] = useState('');
 
   // Fetch customers and items for dropdowns
   useEffect(() => {
@@ -150,8 +160,19 @@ const InvoiceEditorPage = () => {
                 setInvoiceDate(inv.invoice_date ? new Date(inv.invoice_date) : undefined);
                 setDueDate(inv.due_date ? new Date(inv.due_date) : undefined);
                 setCustomerId(inv.customer_id || CUSTOMER_PLACEHOLDER_VALUE);
-                setInvoiceType(inv.invoice_type);
-                setStatus(inv.status);
+                
+                const fetchedInvoiceTypeString = inv.invoice_type as string;
+                const matchedTypeMember = Object.values(InvoiceTypeEnum).find(
+                    member => member.valueOf() === fetchedInvoiceTypeString
+                );
+                setInvoiceType(matchedTypeMember || InvoiceTypeEnum.COMMERCIAL);
+
+                const fetchedStatusString = inv.status as string;
+                const matchedStatusMember = Object.values(InvoiceStatusEnum).find(
+                    member => member.valueOf() === fetchedStatusString
+                );
+                setStatus(matchedStatusMember || InvoiceStatusEnum.DRAFT);
+                
                 setCurrency(inv.currency); 
                 setCurrencyInput(inv.currency);
                 setTaxPercentage(inv.tax_percentage?.toString() || '');
@@ -160,19 +181,29 @@ const InvoiceEditorPage = () => {
                 setContainerNumber(inv.container_number || '');
                 setSealNumber(inv.seal_number || '');
                 setHSCode(inv.hs_code || '');
-                setLineItems(inv.line_items.map(li => ({
-                    id: li.id,
-                    _temp_id: uuidv4(),
-                    item_id: li.item_id || undefined,
-                    item_description: li.item_description,
-                    quantity_cartons: li.quantity_cartons?.toString() ?? '',
-                    quantity_units: li.quantity_units?.toString() ?? '',
-                    unit_type: li.unit_type || 'pieces',
-                    price: li.price.toString(),
-                    price_per_type: li.price_per_type,
-                    currency: inv.currency, 
-                    item_specific_comments: li.item_specific_comments || '',
-                })));
+                setBlNumber(inv.bl_number || '');
+                setLineItems(inv.line_items.map(li => {
+                    const matchedPricePerType = Object.values(PricePerTypeEnum).find(
+                        member => member.valueOf() === (li.price_per_type as unknown as string) // Cast if backend sends string
+                    ) || PricePerTypeEnum.UNIT; // Fallback
+
+                    return {
+                        id: li.id,
+                        _temp_id: uuidv4(),
+                        item_id: li.item_id || undefined,
+                        item_description: li.item_description,
+                        quantity_cartons: li.quantity_cartons?.toString() ?? '',
+                        quantity_units: li.quantity_units?.toString() ?? '',
+                        unit_type: li.unit_type || 'pieces',
+                        price: li.price.toString(),
+                        price_per_type: matchedPricePerType, // Set as enum member
+                        currency: inv.currency, 
+                        item_specific_comments: li.item_specific_comments || '',
+                        net_weight_kgs: (li as any).net_weight_kgs?.toString() ?? '',
+                        gross_weight_kgs: (li as any).gross_weight_kgs?.toString() ?? '',
+                        measurement_cbm: (li as any).measurement_cbm?.toString() ?? '',
+                    };
+                }));
             })
             .catch(err => {
                 console.error("Failed to fetch invoice for editing:", err);
@@ -194,11 +225,12 @@ const InvoiceEditorPage = () => {
         setContainerNumber('');
         setSealNumber('');
         setHSCode('');
-        if (lineItems.length === 0 || !isEditMode) {
+        setBlNumber('');
+        if (lineItems.length === 0) { // Check if already initialized
              setLineItems([createDefaultLineItem(INITIAL_CURRENCY)]);
         }
     }
-  }, [invoiceId, isEditMode]);
+  }, [invoiceId, isEditMode]); // Removed addInitialLineItem, as it's part of useState init
 
 
   // Recalculate totals
@@ -215,7 +247,7 @@ const InvoiceEditorPage = () => {
   const handleLineItemChange = (index: number, field: keyof InvoiceItemFormData, value: string | number | PricePerTypeEnum | undefined | null) => {
     const updatedLineItems = lineItems.map((item, idx) => {
         if (index === idx) {
-            return { ...item, [field]: value };
+            return { ...item, [field]: value }; // Value is already enum member for price_per_type
         }
         return item;
     });
@@ -289,30 +321,16 @@ const InvoiceEditorPage = () => {
         const queryParams = new URLSearchParams(location.search);
         effectiveOrgId = queryParams.get('orgId') || undefined;
     }
-    if (!isEditMode && !effectiveOrgId) {
-        setError("Active organization is required to create an invoice.");
-        return;
-    }
-    if (!customerId || customerId === CUSTOMER_PLACEHOLDER_VALUE) {
-        setError("Customer is required. Please select a customer.");
-        return;
-    }
-    if (lineItems.length === 0) {
-        setError("Invoice must have at least one line item.");
-        return;
-    }
+    if (!isEditMode && !effectiveOrgId) { setError("Active organization is required to create an invoice."); return; }
+    if (!customerId || customerId === CUSTOMER_PLACEHOLDER_VALUE) { setError("Customer is required. Please select a customer."); return; }
+    if (lineItems.length === 0) { setError("Invoice must have at least one line item."); return; }
     for (const li of lineItems) {
-        if (!li.item_description || !li.item_description.trim()) {
-            setError("All line items must have a description."); return;
-        }
+        if (!li.item_description || !li.item_description.trim()) { setError("All line items must have a description."); return; }
         if (li.price === '' || li.price === undefined || isNaN(parseFloat(String(li.price))) || parseFloat(String(li.price)) < 0) {
             setError("All line items must have a valid, non-negative price."); return;
         }
     }
-    if (!currency || currency.trim().length !== 3 || !/^[A-Z]+$/.test(currency)) {
-        setError("A valid 3-letter uppercase currency code is required for the invoice.");
-        return;
-    }
+    if (!currency || currency.trim().length !== 3 || !/^[A-Z]+$/.test(currency)) { setError("A valid 3-letter uppercase currency code is required for the invoice."); return; }
 
     setIsLoading(true);
     setError(null);
@@ -326,9 +344,12 @@ const InvoiceEditorPage = () => {
         quantity_units: li.quantity_units ? parseFloat(String(li.quantity_units)) : null,
         unit_type: li.unit_type,
         price: parseFloat(String(li.price)),
-        price_per_type: li.price_per_type,
+        price_per_type: li.price_per_type.valueOf(), // Send string value of enum
         currency: li.currency, 
         item_specific_comments: li.item_specific_comments || null,
+        net_weight_kgs: li.net_weight_kgs ? parseFloat(String(li.net_weight_kgs)) : null,
+        gross_weight_kgs: li.gross_weight_kgs ? parseFloat(String(li.gross_weight_kgs)) : null,
+        measurement_cbm: li.measurement_cbm ? parseFloat(String(li.measurement_cbm)) : null,
     }));
 
     const payload: any = { 
@@ -336,8 +357,8 @@ const InvoiceEditorPage = () => {
         invoice_date: invoiceDate ? invoiceDate.toISOString().split('T')[0] : undefined,
         due_date: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
         customer_id: finalCustomerId,
-        invoice_type: invoiceType,
-        status: status,
+        invoice_type: invoiceType.valueOf(), // Send string value
+        status: status.valueOf(), // Send string value
         currency: currency,
         tax_percentage: taxPercentage !== '' ? parseFloat(String(taxPercentage)) : null,
         discount_percentage: discountPercentage !== '' ? parseFloat(String(discountPercentage)) : null,
@@ -345,6 +366,7 @@ const InvoiceEditorPage = () => {
         container_number: containerNumber || null,
         seal_number: sealNumber || null,
         hs_code: hsCode || null,
+        bl_number: blNumber || null,
         line_items: finalLineItemsForAPI,
     };
     if (!isEditMode && effectiveOrgId) {
@@ -417,19 +439,41 @@ const InvoiceEditorPage = () => {
                      </div>
                      <div>
                          <Label htmlFor="invoice_type">Type</Label>
-                         <Select value={invoiceType} onValueChange={(v) => setInvoiceType(v as InvoiceTypeEnum)}>
-                             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                         <Select 
+                            value={invoiceType.valueOf()}
+                            onValueChange={(valueAsString) => {
+                                const selectedMember = Object.values(InvoiceTypeEnum).find(member => member.valueOf() === valueAsString);
+                                if (selectedMember) setInvoiceType(selectedMember);
+                            }}
+                         >
+                             <SelectTrigger className="mt-1">
+                                 <SelectValue placeholder="Select type..." />
+                             </SelectTrigger>
                              <SelectContent>
-                                 {Object.values(InvoiceTypeEnum).map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                 {Object.values(InvoiceTypeEnum).map(typeMember => (
+                                     <SelectItem key={typeMember.valueOf()} value={typeMember.valueOf()}>
+                                         {formatEnumValueForDisplay(typeMember.valueOf())}
+                                     </SelectItem>
+                                 ))}
                              </SelectContent>
                          </Select>
                      </div>
                      <div>
                          <Label htmlFor="status">Status</Label>
-                         <Select value={status} onValueChange={(v) => setStatus(v as InvoiceStatusEnum)}>
-                             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                         <Select 
+                            value={status.valueOf()} 
+                            onValueChange={(valueAsString) => {
+                                const selectedMember = Object.values(InvoiceStatusEnum).find(member => member.valueOf() === valueAsString);
+                                if (selectedMember) setStatus(selectedMember);
+                            }}
+                         >
+                             <SelectTrigger className="mt-1"><SelectValue placeholder="Select status..." /></SelectTrigger>
                              <SelectContent>
-                                 {Object.values(InvoiceStatusEnum).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                 {Object.values(InvoiceStatusEnum).map(statusMember => (
+                                     <SelectItem key={statusMember.valueOf()} value={statusMember.valueOf()}>
+                                         {formatEnumValueForDisplay(statusMember.valueOf())}
+                                     </SelectItem>
+                                 ))}
                              </SelectContent>
                          </Select>
                      </div>
@@ -459,6 +503,9 @@ const InvoiceEditorPage = () => {
                                  <TableHead className="w-[100px]">Qty (Units)</TableHead>
                                  <TableHead className="w-[100px]">Unit Type</TableHead>
                                  <TableHead className="w-[100px]">Qty (Cartons)</TableHead>
+                                 <TableHead className="w-[100px]">Net Weight (kg)</TableHead>
+                                 <TableHead className="w-[100px]">Gross Weight (kg)</TableHead>
+                                 <TableHead className="w-[100px]">Measurement (m³)</TableHead>
                                  <TableHead className="w-[120px]">Price</TableHead>
                                  <TableHead className="w-[120px]">Price Per</TableHead>
                                  <TableHead className="w-[80px]">Currency</TableHead>
@@ -502,12 +549,25 @@ const InvoiceEditorPage = () => {
                                  <TableCell><Input type="number" step="any" value={item.quantity_units || ''} onChange={e => handleLineItemChange(index, 'quantity_units', e.target.value)} placeholder="0" className="w-full" /></TableCell>
                                  <TableCell><Input value={item.unit_type || ''} onChange={e => handleLineItemChange(index, 'unit_type', e.target.value)} placeholder="pieces" className="w-full" /></TableCell>
                                  <TableCell><Input type="number" step="any" value={item.quantity_cartons || ''} onChange={e => handleLineItemChange(index, 'quantity_cartons', e.target.value)} placeholder="0" className="w-full"/></TableCell>
+                                 <TableCell><Input type="number" step="any" value={item.net_weight_kgs || ''} onChange={e => handleLineItemChange(index, 'net_weight_kgs', e.target.value)} placeholder="0" className="w-full"/></TableCell>
+                                 <TableCell><Input type="number" step="any" value={item.gross_weight_kgs || ''} onChange={e => handleLineItemChange(index, 'gross_weight_kgs', e.target.value)} placeholder="0" className="w-full"/></TableCell>
+                                 <TableCell><Input type="number" step="any" value={item.measurement_cbm || ''} onChange={e => handleLineItemChange(index, 'measurement_cbm', e.target.value)} placeholder="0" className="w-full"/></TableCell>
                                  <TableCell><Input type="number" step="0.01" value={item.price || ''} onChange={e => handleLineItemChange(index, 'price', e.target.value)} required placeholder="0.00" className="w-full"/></TableCell>
                                  <TableCell>
-                                     <Select value={item.price_per_type} onValueChange={v => handleLineItemChange(index, 'price_per_type', v as PricePerTypeEnum)}>
+                                     <Select 
+                                        value={item.price_per_type.valueOf()}
+                                        onValueChange={valueAsString => {
+                                            const selectedMember = Object.values(PricePerTypeEnum).find(member => member.valueOf() === valueAsString);
+                                            if (selectedMember) handleLineItemChange(index, 'price_per_type', selectedMember);
+                                        }}
+                                     >
                                          <SelectTrigger><SelectValue /></SelectTrigger>
                                          <SelectContent>
-                                             {Object.values(PricePerTypeEnum).map(ppt => <SelectItem key={ppt} value={ppt}>{ppt}</SelectItem>)}
+                                             {Object.values(PricePerTypeEnum).map(pptMember => 
+                                                <SelectItem key={pptMember.valueOf()} value={pptMember.valueOf()}>
+                                                    {formatEnumValueForDisplay(pptMember.valueOf())}
+                                                </SelectItem>
+                                            )}
                                          </SelectContent>
                                      </Select>
                                  </TableCell>
@@ -533,40 +593,34 @@ const InvoiceEditorPage = () => {
                  </CardContent>
              </Card>
 
-             {invoiceType === InvoiceTypeEnum.COMMERCIAL && ( // Check against the state variable
+             {(invoiceType === InvoiceTypeEnum.COMMERCIAL || invoiceType === InvoiceTypeEnum.PACKING_LIST) && (
                 <Card>
                     <CardHeader><CardTitle>Shipping & Customs Information</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <div>
                             <Label htmlFor="container_number">Container Number</Label>
-                            <Input 
-                                id="container_number" 
-                                value={containerNumber} 
-                                onChange={e => setContainerNumber(e.target.value)} 
-                                className="mt-1" 
-                                disabled={isLoading}
-                            />
+                            <Input id="container_number" value={containerNumber} onChange={e => setContainerNumber(e.target.value)} className="mt-1" disabled={isLoading}/>
                         </div>
                         <div>
                             <Label htmlFor="seal_number">Seal Number</Label>
-                            <Input 
-                                id="seal_number" 
-                                value={sealNumber} 
-                                onChange={e => setSealNumber(e.target.value)} 
-                                className="mt-1" 
-                                disabled={isLoading}
-                            />
+                            <Input id="seal_number" value={sealNumber} onChange={e => setSealNumber(e.target.value)} className="mt-1" disabled={isLoading}/>
                         </div>
                         <div>
                             <Label htmlFor="hs_code">H.S. Code</Label>
-                            <Input 
-                                id="hs_code" 
-                                value={hsCode} 
-                                onChange={e => setHSCode(e.target.value)} 
-                                className="mt-1" 
-                                disabled={isLoading}
-                            />
+                            <Input id="hs_code" value={hsCode} onChange={e => setHSCode(e.target.value)} className="mt-1" disabled={isLoading}/>
                         </div>
+                        {invoiceType === InvoiceTypeEnum.PACKING_LIST && (
+                            <div>
+                                <Label htmlFor="bl_number">B/L Number</Label>
+                                <Input 
+                                    id="bl_number" 
+                                    value={blNumber} 
+                                    onChange={e => setBlNumber(e.target.value)} 
+                                    className="mt-1" 
+                                    disabled={isLoading}
+                                />
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}  

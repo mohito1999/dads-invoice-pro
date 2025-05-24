@@ -6,20 +6,21 @@ from enum import Enum
 
 # --- Enums for Invoice ---
 class InvoiceTypeEnum(str, Enum):
-    PRO_FORMA = "Pro Forma"
-    COMMERCIAL = "Commercial"
+    PRO_FORMA = "PRO_FORMA"
+    COMMERCIAL = "COMMERCIAL"
+    PACKING_LIST = "PACKING_LIST" # Ensure this matches the new DB label
 
 class InvoiceStatusEnum(str, Enum):
-    DRAFT = "Draft"
-    UNPAID = "Unpaid"
-    PAID = "Paid"
-    PARTIALLY_PAID = "Partially Paid"
-    OVERDUE = "Overdue"
-    CANCELLED = "Cancelled"
+    DRAFT = "DRAFT"
+    UNPAID = "UNPAID"
+    PAID = "PAID"
+    PARTIALLY_PAID = "PARTIALLY_PAID"
+    OVERDUE = "OVERDUE"
+    CANCELLED = "CANCELLED"
 
 class PricePerTypeEnum(str, Enum):
-    UNIT = "unit"
-    CARTON = "carton"
+    UNIT = "UNIT"
+    CARTON = "CARTON"
 
 # --- InvoiceItem Schemas ---
 class InvoiceItemBase(BaseModel):
@@ -27,11 +28,17 @@ class InvoiceItemBase(BaseModel):
     quantity_cartons: Optional[float] = Field(default=None, ge=0)
     quantity_units: Optional[float] = Field(default=None, ge=0)
     unit_type: Optional[str] = Field(default="pieces", description="e.g., pieces, units, dozens, sets, kg, meters")
-    price: float = Field(..., gt=0) 
+    price: float = Field(..., ge=0) 
     price_per_type: PricePerTypeEnum = PricePerTypeEnum.UNIT
     currency: str = Field(default="USD", max_length=3, min_length=3)
     item_specific_comments: Optional[str] = None
     # item_id is handled in Create/Response schemas
+
+    # --- NEW OPTIONAL FIELDS ---
+    net_weight_kgs: Optional[float] = Field(default=None, ge=0)
+    gross_weight_kgs: Optional[float] = Field(default=None, ge=0)
+    measurement_cbm: Optional[float] = Field(default=None, ge=0) # Cubic Meters
+    # --- END NEW FIELDS ---
 
 class InvoiceItemCreate(InvoiceItemBase):
     item_id: Optional[uuid.UUID] = None 
@@ -46,6 +53,12 @@ class InvoiceItemUpdate(BaseModel): # All fields optional for update
     currency: Optional[str] = Field(default=None, max_length=3, min_length=3, allow_none=True)
     item_specific_comments: Optional[str] = None
     item_id: Optional[uuid.UUID] = None # Allow changing/setting linked item
+
+    # --- NEW OPTIONAL FIELDS for update ---
+    net_weight_kgs: Optional[float] = Field(default=None, ge=0, allow_none=True)
+    gross_weight_kgs: Optional[float] = Field(default=None, ge=0, allow_none=True)
+    measurement_cbm: Optional[float] = Field(default=None, ge=0, allow_none=True)
+    # --- END NEW FIELDS ---
 
 class InvoiceItem(InvoiceItemBase): # Response model for InvoiceItem
     id: uuid.UUID
@@ -83,6 +96,8 @@ class InvoiceBase(BaseModel):
     hs_code: Optional[str] = Field(default=None, max_length=100)
     # --- END NEW FIELDS ---
 
+    bl_number: Optional[str] = Field(default=None, max_length=100)
+
 class InvoiceCreate(InvoiceBase):
     organization_id: uuid.UUID
     customer_id: uuid.UUID
@@ -99,6 +114,7 @@ class InvoiceCreate(InvoiceBase):
     total_amount: Optional[float] = Field(None, exclude=True)
     amount_paid: float = Field(0.0, exclude=True) # Default to 0, exclude from client input
     pdf_url: Optional[HttpUrl] = Field(None, exclude=True)
+    invoice_type: InvoiceTypeEnum = InvoiceTypeEnum.COMMERCIAL
     
     # New fields (container_number, seal_number, hs_code) are inherited as optional from InvoiceBase.
 
@@ -139,6 +155,8 @@ class InvoiceUpdate(BaseModel):
     seal_number: Optional[str] = Field(default=None, max_length=100, validate_default=False)
     hs_code: Optional[str] = Field(default=None, max_length=100, validate_default=False)
     # --- END NEW FIELDS ---
+
+    bl_number: Optional[str] = Field(default=None, max_length=100, validate_default=False)
 
 
 class Invoice(InvoiceBase): # Full invoice response model

@@ -453,3 +453,91 @@ async def transform_pro_forma_to_commercial(
     )
     print(f"--- DEBUG: Exiting transform_pro_forma_to_commercial. New Commercial Invoice ID: {new_commercial_invoice.id}, Total: {new_commercial_invoice.total_amount} ---\n")
     return new_commercial_invoice
+
+
+async def create_packing_list_from_commercial(
+      db: AsyncSession, *, commercial_invoice: InvoiceModel, new_packing_list_number: Optional[str] = None
+  ) -> InvoiceModel:
+      """
+      Creates a new Packing List (as an Invoice of type PACKING_LIST)
+      based on an existing Commercial invoice.
+      Copies line items (including weights/CBMs if present) and relevant header data.
+      Financial data (prices, totals) are typically zeroed out or ignored for packing lists.
+      """
+      print(f"\n--- DEBUG: Entering create_packing_list_from_commercial for Commercial Invoice ID: {commercial_invoice.id} ---")
+      if commercial_invoice.invoice_type != InvoiceTypeEnum.COMMERCIAL:
+          raise ValueError("Only Commercial invoices can be used to generate a Packing List.")
+
+      # Ensure line items and their linked items (for image_url etc.) are loaded from the commercial_invoice
+      # This relies on commercial_invoice being fetched appropriately before calling this.
+      # If not sure, you might need to refresh:
+      if not commercial_invoice.line_items or not all(hasattr(li, 'item') for li in commercial_invoice.line_items if li.item_id):
+          print(f"DEBUG (packing_list_transform): Refreshing line_items and their linked items for Commercial Invoice ID: {commercial_invoice.id}")
+          # This refresh is complex if items for line_items aren't always loaded.
+          # get_invoice() should have loaded them. If commercial_invoice comes from a list, it might not be deep enough.
+          # For simplicity, assume commercial_invoice is fully loaded (e.g., by a call to get_invoice).
+
+
+      new_line_items_data: List[InvoiceItemCreate] = []
+      if commercial_invoice.line_items:
+          print(f"DEBUG (packing_list_transform): Copying {len(commercial_invoice.line_items)} line items.")
+          for li_orm in commercial_invoice.line_items:
+              new_line_items_data.append(
+                  InvoiceItemCreate(
+                      item_description=li_orm.item_description,
+                      quantity_cartons=li_orm.quantity_cartons,
+                      quantity_units=li_orm.quantity_units,
+                      unit_type=li_orm.unit_type,
+                      # For packing list, price and line_total are often 0 or not relevant
+                      price=0, # Or li_orm.price if you want to copy it but not display
+                      price_per_type=li_orm.price_per_type, 
+                      currency=li_orm.currency, # Keep currency for context if needed
+                      item_specific_comments=li_orm.item_specific_comments,
+                      item_id=li_orm.item_id,
+                      # Copy packing list specific fields
+                      net_weight_kgs=li_orm.net_weight_kgs,
+                      gross_weight_kgs=li_orm.gross_weight_kgs,
+                      measurement_cbm=li_orm.measurement_cbm
+                  )
+              )
+      
+      final_packing_list_number = new_packing_list_number or f"PL-{commercial_invoice.invoice_number}"
+
+      packing_list_create_payload = InvoiceCreate(
+          invoice_number=final_packing_list_number,
+          invoice_date=date.today(), # Packing list date is usually current date
+          # due_date: None, # Not relevant for packing list
+          invoice_type=InvoiceTypeEnum.PACKING_LIST, # Key change
+          status=InvoiceStatusEnum.DRAFT, # Or a more specific status like "Finalized" if PLs have stages
+          currency=commercial_invoice.currency, # Keep for context
+          organization_id=commercial_invoice.organization_id,
+          customer_id=commercial_invoice.customer_id,
+          
+          # Financials are typically 0 or not applicable for packing lists
+          subtotal_amount=0,
+          tax_percentage=0, # Explicitly 0
+          tax_amount=0,
+          discount_percentage=0, # Explicitly 0
+          discount_amount=0,
+          total_amount=0,
+          amount_paid=0,
+          
+          # Copy shipping info
+          container_number=commercial_invoice.container_number,
+          seal_number=commercial_invoice.seal_number,
+          hs_code=commercial_invoice.hs_code,
+
+          comments_notes=commercial_invoice.comments_notes, # Or specific packing notes
+          line_items=new_line_items_data
+      )
+      print(f"DEBUG (packing_list_transform): PackingListCreate payload: {packing_list_create_payload}")
+
+      # Use create_invoice_with_items to create this new "Invoice" of type PACKING_LIST
+      # It will recalculate financials based on the (likely zeroed) prices in line_items.
+      new_packing_list_invoice = await create_invoice_with_items(
+          db=db,
+          invoice_in=packing_list_create_payload,
+          owner_id=commercial_invoice.user_id # Same owner
+      )
+      print(f"--- DEBUG: Exiting create_packing_list_from_commercial. New Packing List (Invoice ID): {new_packing_list_invoice.id} ---")
+      return new_packing_list_invoice

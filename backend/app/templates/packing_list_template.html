@@ -2,16 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice {{ invoice.invoice_number }}</title>
+    <title>Packing List {{ invoice.invoice_number }}</title>
     <style>
         :root {
-            --primary-color: #002235; /* Dark Blue */
+            --primary-color: #002235; 
             --text-color: #333333;
             --text-light-color: #555555;
             --border-color: #dddddd;
             --table-header-bg: #f0f4f8; 
             --table-row-alt-bg: #f9f9f9;
-            --card-bg: #ffffff;
         }
 
         body {
@@ -28,7 +27,7 @@
             margin: 20mm 15mm;
 
             @top-center {
-                content: "{{ invoice.invoice_type.value | upper if invoice.invoice_type else 'INVOICE' }}";
+                content: "PACKING LIST"; 
                 font-weight: bold;
                 font-size: 16px;
                 color: var(--primary-color);
@@ -55,7 +54,7 @@
         .invoice-meta-section { text-align: right; max-width: 45%; }
         .invoice-meta-section h2 { font-size: 18pt; font-weight: bold; color: var(--text-color); margin: 0 0 10px 0; text-transform: uppercase; }
         .invoice-meta-section p { margin: 3px 0; font-size: 10pt; }
-        .invoice-meta-section p strong { display: inline-block; min-width: 100px; font-weight: 600; }
+        .invoice-meta-section p strong { display: inline-block; min-width: 150px; font-weight: 600; }
         
         .customer-info-section { margin-bottom: 25px; padding: 15px; background-color: var(--table-row-alt-bg); border: 1px solid var(--border-color); border-radius: 4px; }
         .customer-info-section h3 { margin: 0 0 8px 0; font-size: 11pt; font-weight: bold; color: var(--primary-color); }
@@ -73,18 +72,8 @@
         .items-table th.item-image-col, 
         .items-table td.item-image-col { width: 50px; text-align: center; vertical-align: middle; padding: 5px; }
         .items-table td.item-image-col img { max-width: 40px; max-height: 40px; object-fit: contain; display: block; margin: auto; }
-
-        .totals-section { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-        .totals-summary { width: 45%; border: 1px solid var(--border-color); border-radius: 4px; }
-        .totals-summary table { width: 100%; border-collapse: collapse; }
-        .totals-summary td { padding: 7px 10px; font-size: 9.5pt; border-bottom: 1px solid var(--border-color); }
-        .totals-summary tr:last-child td { border-bottom: none; }
-        .totals-summary .label { font-weight: 500; color: var(--text-light-color); }
-        .totals-summary .value { text-align: right; font-weight: bold; }
-        .totals-summary .grand-total .label, .totals-summary .grand-total .value { font-size: 11pt; color: var(--primary-color); padding-top: 8px; padding-bottom: 8px; }
-        .totals-summary .grand-total .value { font-weight: bold; }
         
-        .info-block-section { /* Generic class for shipping and comments */
+        .info-block-section { 
             margin-top: 15px; 
             margin-bottom: 15px; 
             padding:12px; 
@@ -92,33 +81,11 @@
             border-radius: 4px;
             background-color: var(--table-row-alt-bg);
         }
-        .info-block-section h3 {
-            margin:0 0 8px 0; /* Reduced margin-bottom for h3 */
-            font-size: 10pt; 
-            font-weight: bold; 
-            color: var(--primary-color);
-        }
-        .info-block-section table { /* For simple key-value display */
-            width: 100%; 
-            font-size: 9pt;
-            border-collapse: collapse;
-        }
-        .info-block-section table td { 
-            padding: 4px 0; 
-            border: none; 
-            vertical-align: top; /* Align content to top */
-        }
-        .info-block-section table td:first-child { /* Style for labels if using two-column table */
-            width: 30%; 
-            font-weight: 500;
-            color: var(--text-light-color);
-            padding-right: 10px; /* Add some space between label and value */
-        }
-        .info-block-section .notes-content { /* Specific for comment text */
-            white-space: pre-wrap; /* Preserve line breaks */
-            line-height: 1.5; /* Adjust line height for notes */
-            font-size: 9pt;
-        }
+        .info-block-section h3 { margin:0 0 8px 0; font-size: 10pt; font-weight: bold; color: var(--primary-color); }
+        .info-block-section table { width: 100%; font-size: 9pt; border-collapse: collapse; }
+        .info-block-section table td { padding: 4px 0; border: none; vertical-align: top; }
+        .info-block-section table td:first-child { width: 30%; font-weight: 500; color: var(--text-light-color); padding-right: 10px; }
+        .info-block-section .notes-content { white-space: pre-wrap; line-height: 1.5; font-size: 9pt; }
         
         .footer-section { margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border-color); text-align: center; font-size: 8.5pt; color: #777; }
         .footer-section p { margin: 2px 0; }
@@ -126,7 +93,6 @@
 </head>
 <body>
     <div class="container">
-        {# ... (Header, Customer Info, Items Table, Totals sections remain the same) ... #}
         <div class="header-section">
             <div class="company-address">
                 {% if invoice.organization.logo_url %}
@@ -144,15 +110,14 @@
                 {% if invoice.organization.contact_email %}<p><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
             </div>
             <div class="invoice-meta-section">
-                <h2>Invoice</h2>
-                <p><strong>Number:</strong> {{ invoice.invoice_number }}</p>
+                <h2>Packing List</h2> 
+                <p><strong>Reference Invoice No:</strong> {{ invoice.invoice_number }}</p> 
                 <p><strong>Date:</strong> {{ invoice.invoice_date.strftime('%B %d, %Y') if invoice.invoice_date else '' }}</p>
-                {% if invoice.due_date %}<p><strong>Due Date:</strong> {{ invoice.due_date.strftime('%B %d, %Y') }}</p>{% endif %}
             </div>
         </div>
 
         <div class="customer-info-section">
-            <h3>BILL TO:</h3>
+            <h3>CONSIGNEE / BILL TO:</h3> 
             <p><strong>{{ invoice.customer.company_name }}</strong></p>
             {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
             <p>{{ invoice.customer.billing_address_line1 or '' }}</p>
@@ -169,13 +134,14 @@
             <thead>
                 <tr>
                     <th style="width: 4%;" class="text-center">#</th>
-                    <th class="item-image-col">Image</th>
-                    <th style="width: 32%;">Description</th>
+                    <th class="item-image-col" style="width: 7%;">Image</th>
+                    <th style="width: 29%;">Description</th>
                     <th style="width: 8%;" class="text-center">Qty (U)</th>
                     <th style="width: 8%;" class="text-center">Qty (C)</th>
-                    <th style="width: 8%;" class="text-center">Unit</th>
-                    <th style="width: 16%;" class="text-right">Unit Price</th>
-                    <th style="width: 17%;" class="text-right">Line Total</th>
+                    <th style="width: 8%;" class="text-center">Unit Type</th>
+                    <th style="width: 12%;" class="text-right">Net Wt (kg)</th>
+                    <th style="width: 12%;" class="text-right">Gross Wt (kg)</th>
+                    <th style="width: 12%;" class="text-right">CBM (m³)</th>
                 </tr>
             </thead>
             <tbody>
@@ -196,62 +162,23 @@
                     <td class="text-center">{{ item_line.quantity_units if item_line.quantity_units is not none else '-' }}</td>
                     <td class="text-center">{{ item_line.quantity_cartons if item_line.quantity_cartons is not none else '-' }}</td>
                     <td class="text-center">{{ item_line.unit_type }}</td>
-                    <td class="text-right">
-                        {{ "%.2f"|format(item_line.price) }} 
-                        {% if item_line.currency %}{{ item_line.currency }}{% else %}{{ invoice.currency }}{% endif %}
-                        {% if item_line.price_per_type %}
-                        <small style="display:block; color: #666;">per {{ item_line.price_per_type.value }}</small>
-                        {% endif %}
-                    </td>
-                    <td class="text-right">{{ "%.2f"|format(item_line.line_total) }} {{ invoice.currency }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item_line.net_weight_kgs) if item_line.net_weight_kgs is not none else '-' }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item_line.gross_weight_kgs) if item_line.gross_weight_kgs is not none else '-' }}</td>
+                    <td class="text-right">{{ "%.3f"|format(item_line.measurement_cbm) if item_line.measurement_cbm is not none else '-' }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" style="text-align: center; padding: 20px;">No line items on this invoice.</td>
+                    <td colspan="9" style="text-align: center; padding: 20px;">No line items.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <div class="totals-section">
-            <div class="totals-summary">
-                <table>
-                    <tr>
-                        <td class="label">Subtotal:</td>
-                        <td class="value">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency }}</td>
-                    </tr>
-                    {% if invoice.tax_percentage is not none and invoice.tax_amount > 0 %}
-                    <tr>
-                        <td class="label">Tax {% if invoice.tax_percentage %}({{ "%.2f"|format(invoice.tax_percentage) }}%){% endif %}:</td>
-                        <td class="value">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</td>
-                    </tr>
-                    {% endif %}
-                    {% if invoice.discount_percentage is not none and invoice.discount_amount > 0 %}
-                    <tr>
-                        <td class="label">Discount {% if invoice.discount_percentage %}({{ "%.2f"|format(invoice.discount_percentage) }}%){% endif %}:</td>
-                        <td class="value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</td>
-                    </tr>
-                    {% endif %}
-                    <tr class="grand-total">
-                        <td class="label">TOTAL:</td>
-                        <td class="value">{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency }}</td>
-                    </tr>
-                    {% if invoice.amount_paid and invoice.amount_paid > 0 %}
-                    <tr>
-                        <td class="label" style="padding-top: 10px;">Amount Paid:</td>
-                        <td class="value" style="padding-top: 10px;">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency }}</td>
-                    </tr>
-                    <tr class="grand-total balance-due">
-                        <td class="label">BALANCE DUE:</td>
-                        <td class="value">{{ "%.2f"|format(invoice.total_amount - (invoice.amount_paid or 0)) }} {{ invoice.currency }}</td>
-                    </tr>
-                    {% endif %}
-                </table>
-            </div>
-        </div>
+        {# Totals Section is REMOVED for Packing List #}
 
-        {% if invoice.invoice_type.value == "COMMERCIAL" and (invoice.container_number or invoice.seal_number or invoice.hs_code) %}
-        <div class="info-block-section"> {# Using generic class #}
+        {# Shipping information - shows if any of these fields have data on the Packing List object #}
+        {% if invoice.container_number or invoice.seal_number or invoice.hs_code or invoice.bl_number %}
+        <div class="info-block-section"> 
             <h3>Shipping Information:</h3>
             <table>
                 {% if invoice.container_number %}
@@ -272,24 +199,32 @@
                     <td>{{ invoice.hs_code }}</td>
                 </tr>
                 {% endif %}
+                {# --- ADDED B/L NUMBER DISPLAY (conditionally within the shipping block) --- #}
+                {# The outer 'if' for info-block-section already checks if bl_number has a value, so this will only show if bl_number is true #}
+                {# However, the friend's feedback had specific logic for PACKING_LIST type, which is safer if bl_number is only for packing lists #}
+                {% if invoice.invoice_type.value == "PACKING_LIST" and invoice.bl_number %} 
+                <tr>
+                    <td>B/L Number:</td>
+                    <td>{{ invoice.bl_number }}</td>
+                </tr>
+                {% endif %}
+                {# --- END B/L NUMBER DISPLAY --- #}
             </table>
         </div>
         {% endif %}
 
-        {# --- RESTRUCTURED COMMENTS SECTION --- #}
         {% if invoice.comments_notes %}
         <div class="info-block-section">
             <h3>Comments / Notes:</h3>
             <div class="notes-content">
-{{ invoice.comments_notes }} {# <--- NO leading spaces/indentation before this tag #}
+{{ invoice.comments_notes }}
             </div>
         </div>
         {% endif %}
-        {# --- END RESTRUCTURED COMMENTS SECTION --- #}
         
         <div class="footer-section">
-            <p>Thank you for your business!</p>
-            <p>If you have any questions concerning this invoice, please contact {{ invoice.organization.name }} at {{ invoice.organization.contact_email or '[Organization Email]' }} or {{ invoice.organization.contact_phone or '[Organization Phone]' }}.</p>
+            <p>Shipped By: {{ invoice.organization.name }}</p>
+            <p>If you have any questions concerning this shipment, please contact us.</p>
         </div>
     </div>
 </body>

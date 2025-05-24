@@ -283,3 +283,92 @@ async def transform_invoice_to_commercial(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         
     return commercial_invoice
+
+
+@router.post("/{commercial_invoice_id}/generate-packing-list", response_model=schemas.Invoice, status_code=status.HTTP_201_CREATED)
+async def generate_packing_list_from_invoice(
+    commercial_invoice_id: uuid.UUID,
+    *,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+    new_packing_list_number: Optional[str] = Query(None, description="Optional new number for the Packing List.")
+) -> Any:
+    """
+    Generates a new Packing List (as an Invoice of type PACKING_LIST)
+    from an existing Commercial Invoice.
+    """
+    commercial_invoice = await crud.invoice.get_invoice(db, invoice_id=commercial_invoice_id)
+    if not commercial_invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commercial Invoice not found")
+    if commercial_invoice.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions for this invoice")
+    if commercial_invoice.invoice_type != schemas.InvoiceTypeEnum.COMMERCIAL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only Commercial invoices can be used to generate a Packing List."
+        )
+
+    try:
+        packing_list_invoice = await crud.invoice.create_packing_list_from_commercial(
+            db=db,
+            commercial_invoice=commercial_invoice,
+            new_packing_list_number=new_packing_list_number
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+    return packing_list_invoice
+
+@router.get("/{invoice_id}/packing-list-pdf", response_class=Response)
+async def download_packing_list_pdf(
+    invoice_id: uuid.UUID, # This ID should be for an invoice of type PACKING_LIST or COMMERCIAL
+    *,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(deps.get_current_active_user)
+) -> Response:
+    """
+    Download a Packing List PDF.
+    The invoice_id provided should be for an invoice that is either
+    a Commercial Invoice or an already generated Packing List (type PACKING_LIST).
+    The template will display packing list specific information.
+    """
+    packing_list_data_source = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
+    
+    if not packing_list_data_source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source document for Packing List not found")
+    if packing_list_data_source.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    
+    # While the source can be Commercial, the PDF should always look like a Packing List
+    # The template itself handles showing/hiding fields.
+    # We could also enforce that only type PACKING_LIST can use this specific endpoint.
+    # if packing_list_data_source.invoice_type != schemas.InvoiceTypeEnum.PACKING_LIST:
+    #     raise HTTPException(status_code=400, detail="This endpoint is only for generated Packing Lists.")
+
+
+    # Ensure related data for the template is loaded
+    if not packing_list_data_source.organization: await db.refresh(packing_list_data_source, ['organization'])
+    if not packing_list_data_source.customer: await db.refresh(packing_list_data_source, ['customer'])
+    if not packing_list_data_source.line_items or not all(hasattr(li, 'item') for li in packing_list_data_source.line_items if li.item_id):
+        await db.refresh(packing_list_data_source, ['line_items.item'])
+
+
+    try:
+        template = jinja_env.get_template("packing_list_template.html")
+        html_content = template.render(invoice=packing_list_data_source) # Pass invoice data to template
+    except Exception as e:
+        print(f"Error rendering packing list template: {e}")
+        raise HTTPException(status_code=500, detail="Error generating packing list: Template rendering failed.")
+
+    try:
+        pdf_bytes = HTML(string=html_content).write_pdf()
+    except Exception as e:
+        print(f"Error generating packing list PDF with WeasyPrint: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating packing list: PDF conversion failed.")
+
+    filename = f"PackingList-{packing_list_data_source.invoice_number.replace('/', '-')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
