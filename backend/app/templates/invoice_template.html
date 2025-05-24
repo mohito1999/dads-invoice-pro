@@ -4,243 +4,350 @@
     <meta charset="UTF-8">
     <title>Invoice {{ invoice.invoice_number }}</title>
     <style>
+        :root {
+            --primary-color: #002235; /* A nice blue, change as needed */
+            --text-color: #333333;
+            --text-light-color: #555555;
+            --border-color: #dddddd;
+            --table-header-bg: #f0f4f8; /* Light blue/gray for table headers */
+            --table-row-alt-bg: #f9f9f9;
+            --card-bg: #ffffff;
+        }
+
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 12px;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 10pt; /* Slightly smaller base for more content */
+            color: var(--text-color);
             margin: 0;
             padding: 0;
+            line-height: 1.6;
         }
+
         @page {
             size: A4;
-            margin: 1cm; /* Standard margin */
+            margin: 20mm 15mm; /* Top/Bottom, Left/Right */
 
-            /* Example for header/footer using CSS Paged Media */
             @top-center {
-                content: "{{ invoice.invoice_type | upper }} INVOICE";
+                content: "{{ invoice.invoice_type | upper }}";
                 font-weight: bold;
-                font-size: 14px;
-                color: #555;
-                vertical-align: bottom;
-                padding-bottom: 5mm;
+                font-size: 16px;
+                color: var(--primary-color);
+                padding-bottom: 8mm;
+                border-bottom: 1px solid var(--border-color);
+                width: 100%; /* Make it span full width */
             }
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
-                font-size: 10px;
+                font-size: 9pt;
                 color: #777;
                 vertical-align: top;
                 padding-top: 5mm;
             }
         }
+
         .container {
             width: 100%;
-            margin: 0 auto;
         }
-        .header {
-            display: flex; /* Using flexbox for layout */
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .header .logo {
-            max-width: 150px;
-            max-height: 70px;
-        }
-        .header .org-details {
-            text-align: right;
-        }
-        .header .org-details h2 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
-            color: #000;
-        }
-        .invoice-info {
+
+        .header-section {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 20px;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            /* border-bottom: 2px solid var(--primary-color); */
         }
-        .invoice-info .customer-details {
-            max-width: 60%;
+
+        .header-section .logo {
+            max-width: 180px; /* Slightly larger logo allowance */
+            max-height: 80px;
+            object-fit: contain; /* Ensure logo scales nicely */
         }
-        .invoice-info .invoice-meta {
-            text-align: right;
+
+        .header-section .company-address {
+            text-align: left;
+            max-width: 50%;
         }
-        .invoice-meta p, .customer-details p, .org-details p {
-            margin: 2px 0;
-            line-height: 1.4;
-        }
-        strong {
+        .header-section .company-address h1 {
+            font-size: 20pt;
             font-weight: bold;
+            color: var(--primary-color);
+            margin: 0 0 5px 0;
         }
-        table {
+         .header-section .company-address p {
+            margin: 2px 0;
+            font-size: 9pt;
+            color: var(--text-light-color);
+        }
+
+
+        .invoice-meta-section {
+            text-align: right;
+            max-width: 45%;
+        }
+        .invoice-meta-section h2 {
+            font-size: 18pt;
+            font-weight: bold;
+            color: var(--text-color);
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+        }
+        .invoice-meta-section p {
+            margin: 3px 0;
+            font-size: 10pt;
+        }
+        .invoice-meta-section p strong {
+            display: inline-block;
+            min-width: 110px; /* Align labels */
+            font-weight: 600;
+        }
+
+        .customer-info-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: var(--table-row-alt-bg); /* Subtle background for this block */
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        .customer-info-section h3 {
+            margin: 0 0 8px 0;
+            font-size: 11pt;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        .customer-info-section p {
+            margin: 2px 0;
+            font-size: 9.5pt;
+        }
+        .customer-info-section strong {
+            font-weight: 600; /* Less shouty than default bold */
+        }
+
+
+        .items-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
+        .items-table th, .items-table td {
+            border: 1px solid var(--border-color);
+            padding: 10px; /* More padding */
             text-align: left;
+            font-size: 9.5pt;
         }
-        th {
-            background-color: #f9f9f9;
+        .items-table th {
+            background-color: var(--table-header-bg);
+            color: var(--primary-color); /* Header text in primary color */
             font-weight: bold;
+            text-transform: uppercase; /* Uppercase headers */
         }
-        .text-right {
+        .items-table tbody tr:nth-child(even) {
+            background-color: var(--table-row-alt-bg);
+        }
+        .items-table .text-right { text-align: right; }
+        .items-table .text-center { text-align: center; }
+        .items-table .description-cell small {
+            font-size: 8.5pt;
+            color: var(--text-light-color);
+        }
+
+
+        .totals-section {
+            display: flex;
+            justify-content: flex-end; /* Align totals to the right */
+            margin-bottom: 25px;
+        }
+        .totals-summary {
+            width: 45%; /* Adjust width as needed */
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        .totals-summary table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .totals-summary td {
+            padding: 8px 10px;
+            font-size: 10pt;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .totals-summary tr:last-child td {
+            border-bottom: none;
+        }
+        .totals-summary .label {
+            font-weight: 500;
+            color: var(--text-light-color);
+        }
+        .totals-summary .value {
             text-align: right;
-        }
-        .totals-table {
-            width: 40%;
-            margin-left: auto; /* Align to the right */
-            margin-bottom: 20px;
-        }
-        .totals-table td {
-            border: none; /* Or style as needed */
-            padding: 5px 8px;
-        }
-        .totals-table tr.grand-total td {
             font-weight: bold;
-            font-size: 1.1em;
-            border-top: 1px solid #555;
         }
-        .comments {
+        .totals-summary .grand-total .label,
+        .totals-summary .grand-total .value {
+            font-size: 12pt;
+            color: var(--primary-color);
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+        .totals-summary .grand-total .value {
+            font-weight: bold;
+        }
+
+
+        .comments-section {
             margin-top: 30px;
-            padding: 10px;
-            border: 1px solid #eee;
-            background-color: #fdfdfd;
-            white-space: pre-wrap; /* Preserve line breaks in comments */
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            background-color: var(--table-row-alt-bg);
+            border-radius: 4px;
+            font-size: 9.5pt;
+            white-space: pre-wrap;
         }
-        .footer-notes {
+        .comments-section strong {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .footer-section {
             margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
             text-align: center;
-            font-size: 10px;
+            font-size: 9pt;
             color: #777;
+        }
+        .footer-section p {
+            margin: 3px 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div>
+        <div class="header-section">
+            <div class="company-address">
                 {% if invoice.organization.logo_url %}
-                    <img src="{{ invoice.organization.logo_url }}" alt="Logo" class="logo">
+                    <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
                 {% else %}
-                    <h2>{{ invoice.organization.name }}</h2>
+                    <h1>{{ invoice.organization.name }}</h1>
                 {% endif %}
-            </div>
-            <div class="org-details">
-                <h2>{{ invoice.organization.name }}</h2>
                 <p>{{ invoice.organization.address_line1 or '' }}</p>
                 {% if invoice.organization.address_line2 %}<p>{{ invoice.organization.address_line2 }}</p>{% endif %}
                 <p>
                     {{ invoice.organization.city or '' }}{% if invoice.organization.state_province_region %}, {{ invoice.organization.state_province_region }}{% endif %} {{ invoice.organization.zip_code or '' }}
                 </p>
                 <p>{{ invoice.organization.country or '' }}</p>
-                {% if invoice.organization.contact_phone %}<p>Phone: {{ invoice.organization.contact_phone }}</p>{% endif %}
-                {% if invoice.organization.contact_email %}<p>Email: {{ invoice.organization.contact_email }}</p>{% endif %}
+                {% if invoice.organization.contact_phone %}<p><strong>Phone:</strong> {{ invoice.organization.contact_phone }}</p>{% endif %}
+                {% if invoice.organization.contact_email %}<p><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
             </div>
-        </div>
-
-        <div class="invoice-info">
-            <div class="customer-details">
-                <strong>Bill To:</strong><br>
-                <strong>{{ invoice.customer.company_name }}</strong><br>
-                {% if invoice.customer.poc_name %}{{ invoice.customer.poc_name }}<br>{% endif %}
-                {{ invoice.customer.billing_address_line1 or '' }}<br>
-                {% if invoice.customer.billing_address_line2 %}{{ invoice.customer.billing_address_line2 }}<br>{% endif %}
-                {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}<br>
-                {{ invoice.customer.billing_country or '' }}<br>
-                {% if invoice.customer.email %}Email: {{ invoice.customer.email }}<br>{% endif %}
-                {% if invoice.customer.phone_number %}Phone: {{ invoice.customer.phone_number }}<br>{% endif %}
-            </div>
-            <div class="invoice-meta">
-                <p><strong>Invoice Number:</strong> {{ invoice.invoice_number }}</p>
-                <p><strong>Invoice Date:</strong> {{ invoice.invoice_date.strftime('%B %d, %Y') if invoice.invoice_date else '' }}</p>
+            <div class="invoice-meta-section">
+                <h2>Invoice</h2>
+                <p><strong>Number:</strong> {{ invoice.invoice_number }}</p>
+                <p><strong>Date:</strong> {{ invoice.invoice_date.strftime('%B %d, %Y') if invoice.invoice_date else '' }}</p>
                 {% if invoice.due_date %}<p><strong>Due Date:</strong> {{ invoice.due_date.strftime('%B %d, %Y') }}</p>{% endif %}
-                <p><strong>Status:</strong> {{ invoice.status.value }}</p>
+                <p><strong>Status:</strong> {{ invoice.status.value | title }}</p>
             </div>
         </div>
 
-        <table>
+        <div class="customer-info-section">
+            <h3>BILL TO:</h3>
+            <p><strong>{{ invoice.customer.company_name }}</strong></p>
+            {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
+            <p>{{ invoice.customer.billing_address_line1 or '' }}</p>
+            {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{% endif %}
+            <p>
+                {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}
+            </p>
+            <p>{{ invoice.customer.billing_country or '' }}</p>
+            {% if invoice.customer.email %}<p><strong>Email:</strong> {{ invoice.customer.email }}</p>{% endif %}
+            {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>{% endif %}
+        </div>
+
+        <table class="items-table">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Description</th>
-                    <th>Qty (Cartons)</th>
-                    <th>Qty (Units)</th>
-                    <th>Unit Type</th>
-                    <th>Unit Price ({{ invoice.currency }})</th>
-                    <th>Price Basis</th>
-                    <th>Line Total ({{ invoice.currency }})</th>
+                    <th style="width: 5%;" class="text-center">#</th>
+                    <th style="width: 35%;">Description</th>
+                    <th style="width: 10%;" class="text-center">Qty (Units)</th>
+                    <th style="width: 10%;" class="text-center">Qty (Cartons)</th>
+                    <th style="width: 10%;" class="text-center">Unit</th>
+                    <th style="width: 15%;" class="text-right">Unit Price</th>
+                    <th style="width: 15%;" class="text-right">Line Total</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in invoice.line_items %}
                 <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>
+                    <td class="text-center">{{ loop.index }}</td>
+                    <td class="description-cell">
                         {{ item.item_description }}
                         {% if item.item_specific_comments %}<br><small><em>{{ item.item_specific_comments }}</em></small>{% endif %}
                     </td>
-                    <td class="text-right">{{ item.quantity_cartons if item.quantity_cartons is not none else '-' }}</td>
-                    <td class="text-right">{{ item.quantity_units if item.quantity_units is not none else '-' }}</td>
-                    <td>{{ item.unit_type }}</td>
-                    <td class="text-right">{{ "%.2f"|format(item.price) }}</td>
-                    <td>per {{ item.price_per_type.value }}</td>
-                    <td class="text-right">{{ "%.2f"|format(item.line_total) }}</td>
+                    <td class="text-center">{{ item.quantity_units if item.quantity_units is not none else '-' }}</td>
+                    <td class="text-center">{{ item.quantity_cartons if item.quantity_cartons is not none else '-' }}</td>
+                    <td class="text-center">{{ item.unit_type }}</td>
+                    <td class="text-right">
+                        {{ "%.2f"|format(item.price) }} {{ item.currency }}
+                        <small style="display:block; color: #666;">per {{ item.price_per_type.value }}</small>
+                    </td>
+                    <td class="text-right">{{ "%.2f"|format(item.line_total) }} {{ invoice.currency }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" style="text-align: center;">No items on this invoice.</td>
+                    <td colspan="7" style="text-align: center; padding: 20px;">No line items on this invoice.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <table class="totals-table">
-            <tr>
-                <td>Subtotal:</td>
-                <td class="text-right">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency }}</td>
-            </tr>
-            {% if invoice.tax_percentage is not none or invoice.tax_amount > 0 %}
-            <tr>
-                <td>Tax {% if invoice.tax_percentage %}({{ invoice.tax_percentage }}%){% endif %}:</td>
-                <td class="text-right">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</td>
-            </tr>
-            {% endif %}
-            {% if invoice.discount_percentage is not none or invoice.discount_amount > 0 %}
-            <tr>
-                <td>Discount {% if invoice.discount_percentage %}({{ invoice.discount_percentage }}%){% endif %}:</td>
-                <td class="text-right">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</td>
-            </tr>
-            {% endif %}
-            <tr class="grand-total">
-                <td><strong>Total:</strong></td>
-                <td class="text-right"><strong>{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency }}</strong></td>
-            </tr>
-            {% if invoice.amount_paid > 0 %}
-            <tr>
-                <td>Amount Paid:</td>
-                <td class="text-right">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency }}</td>
-            </tr>
-            <tr>
-                <td><strong>Balance Due:</strong></td>
-                <td class="text-right"><strong>{{ "%.2f"|format(invoice.total_amount - invoice.amount_paid) }} {{ invoice.currency }}</strong></td>
-            </tr>
-            {% endif %}
-        </table>
+        <div class="totals-section">
+            <div class="totals-summary">
+                <table>
+                    <tr>
+                        <td class="label">Subtotal:</td>
+                        <td class="value">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% if invoice.tax_percentage is not none and invoice.tax_amount > 0 %}
+                    <tr>
+                        <td class="label">Tax {% if invoice.tax_percentage %}({{ "%.2f"|format(invoice.tax_percentage) }}%){% endif %}:</td>
+                        <td class="value">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if invoice.discount_percentage is not none and invoice.discount_amount > 0 %}
+                    <tr>
+                        <td class="label">Discount {% if invoice.discount_percentage %}({{ "%.2f"|format(invoice.discount_percentage) }}%){% endif %}:</td>
+                        <td class="value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="grand-total">
+                        <td class="label">TOTAL:</td>
+                        <td class="value">{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% if invoice.amount_paid and invoice.amount_paid > 0 %}
+                    <tr>
+                        <td class="label" style="padding-top: 10px;">Amount Paid:</td>
+                        <td class="value" style="padding-top: 10px;">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency }}</td>
+                    </tr>
+                    <tr class="grand-total balance-due">
+                        <td class="label">BALANCE DUE:</td>
+                        <td class="value">{{ "%.2f"|format(invoice.total_amount - invoice.amount_paid) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
 
         {% if invoice.comments_notes %}
-        <div class="comments">
-            <strong>Comments / Notes:</strong><br>
+        <div class="comments-section">
+            <strong>Comments / Notes:</strong>
             {{ invoice.comments_notes }}
         </div>
         {% endif %}
         
-        <div class="footer-notes">
+        <div class="footer-section">
             <p>Thank you for your business!</p>
+            <p>If you have any questions concerning this invoice, please contact {{ invoice.organization.name }} at {{ invoice.organization.contact_email or '[Organization Email]' }} or {{ invoice.organization.contact_phone or '[Organization Phone]' }}.</p>
             <!-- Add bank details or other standard footer notes here -->
         </div>
     </div>

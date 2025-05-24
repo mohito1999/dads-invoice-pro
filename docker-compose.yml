@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword123} # Default if not set in .env
       POSTGRES_DB: ${POSTGRES_DB:-dads_invoice_db}    # Default if not set in .env
     ports:
-      - "${POSTGRES_PORT:-5435}:5432" # Map host port (default 5435) to container port 5432
+      - "5435:5432" # Map host port (default 5435) to container port 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
