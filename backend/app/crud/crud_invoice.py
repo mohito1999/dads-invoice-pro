@@ -70,16 +70,22 @@ def calculate_invoice_financials(
 
 
 async def get_invoice(db: AsyncSession, invoice_id: uuid.UUID) -> Optional[InvoiceModel]:
+    """
+    Get a single invoice by its ID, eagerly loading line items (and their related item for image_url), 
+    customer, and organization.
+    """
     result = await db.execute(
         select(InvoiceModel)
         .options(
-            selectinload(InvoiceModel.line_items), 
             joinedload(InvoiceModel.customer),
-            joinedload(InvoiceModel.organization)
+            joinedload(InvoiceModel.organization),
+            selectinload(InvoiceModel.line_items).selectinload(InvoiceItemModel.item) # <--- CRUCIAL LINE FOR ITEM IMAGE
         )
         .filter(InvoiceModel.id == invoice_id)
     )
-    return result.scalars().first()
+    invoice = result.scalars().first()
+
+    return invoice
 
 async def get_invoices_by_user(
     db: AsyncSession, *, user_id: uuid.UUID, organization_id: Optional[uuid.UUID] = None,

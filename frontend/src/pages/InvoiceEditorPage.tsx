@@ -18,13 +18,28 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2Icon, PlusCircleIcon } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext';
-// import { useAuth } from '@/contexts/AuthContext'; // Not directly used here
+// import { useAuth } from '@/contexts/AuthContext';
 
 // --- Define Placeholder Values ---
 const CUSTOMER_PLACEHOLDER_VALUE = "---SELECT_CUSTOMER_PLACEHOLDER---";
 const ITEM_PLACEHOLDER_VALUE = "---TYPE_MANUALLY_PLACEHOLDER---";
 
-// --- Placeholder Calculation Functions (to be moved to src/lib/utils.ts later) ---
+// --- Initial Currency Definition ---
+const INITIAL_CURRENCY = 'USD';
+
+// --- Helper function to create a default line item ---
+const createDefaultLineItem = (currentInvoiceCurrency: string): InvoiceItemFormData => ({
+    _temp_id: uuidv4(),
+    item_id: undefined, 
+    item_description: '',
+    quantity_units: '1',
+    unit_type: 'pieces',
+    price: '0',
+    price_per_type: PricePerTypeEnum.UNIT,
+    currency: currentInvoiceCurrency,
+});
+
+// --- Calculation Functions ---
 const round = (num: number, places: number = 2): number => {
     return parseFloat(num.toFixed(places));
 };
@@ -59,7 +74,7 @@ const calculateTotals = (
     const totalAmount = round(subtotal + taxAmount - discountAmount, 2);
     return { subtotal, taxAmount, discountAmount, totalAmount };
 };
-// --- End Placeholder Calculation Functions ---
+// --- End Calculation Functions ---
 
 
 const InvoiceEditorPage = () => {
@@ -74,52 +89,37 @@ const InvoiceEditorPage = () => {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
   const [dueDate, setDueDate] = useState<Date | undefined>();
-  const [customerId, setCustomerId] = useState<string>(CUSTOMER_PLACEHOLDER_VALUE); // Initialize with placeholder
+  const [customerId, setCustomerId] = useState<string>(CUSTOMER_PLACEHOLDER_VALUE);
   const [invoiceType, setInvoiceType] = useState<InvoiceTypeEnum>(InvoiceTypeEnum.COMMERCIAL);
   const [status, setStatus] = useState<InvoiceStatusEnum>(InvoiceStatusEnum.DRAFT);
-  const [currency, setCurrency] = useState('USD');
+  
+  const [currency, setCurrency] = useState(INITIAL_CURRENCY); 
+  const [currencyInput, setCurrencyInput] = useState(INITIAL_CURRENCY); // For direct input typing
+
   const [taxPercentage, setTaxPercentage] = useState<string>('');
   const [discountPercentage, setDiscountPercentage] = useState<string>('');
   const [commentsNotes, setCommentsNotes] = useState('');
   
-  // Line Items State
-  const [lineItems, setLineItems] = useState<InvoiceItemFormData[]>([]);
+  const [lineItems, setLineItems] = useState<InvoiceItemFormData[]>(() => 
+    !invoiceId ? [createDefaultLineItem(INITIAL_CURRENCY)] : []
+  );
 
-  // Dropdown Data State
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [items, setItems] = useState<ItemSummary[]>([]);
 
-  // UI State
   const [isLoading, setIsLoading] = useState(false);
-  const [isPageLoading, setIsPageLoading] = useState(isEditMode); // True if edit mode to fetch initial data
+  const [isPageLoading, setIsPageLoading] = useState(isEditMode);
   const [error, setError] = useState<string | null>(null);
 
-  // Calculated Financials State
   const [calculatedSubtotal, setCalculatedSubtotal] = useState(0);
   const [calculatedTax, setCalculatedTax] = useState(0);
   const [calculatedDiscount, setCalculatedDiscount] = useState(0);
   const [calculatedTotal, setCalculatedTotal] = useState(0);
 
-  const addInitialLineItem = useCallback(() => {
-    setLineItems([{
-        _temp_id: uuidv4(),
-        item_id: undefined, // Start with no predefined item selected
-        item_description: '',
-        quantity_units: '1',
-        unit_type: 'pieces',
-        price: '0',
-        price_per_type: PricePerTypeEnum.UNIT,
-        currency: currency,
-    }]);
-  }, [currency]);
-
   // Fetch customers and items for dropdowns
   useEffect(() => {
     if (activeOrganization?.id) {
-        // No need to set isPageLoading here if main invoice fetch handles it for edit mode
-        // For create mode, this might be the primary loading indicator for dropdowns
         if (!isEditMode) setIsPageLoading(true); 
-
         Promise.all([
             apiClient.get<CustomerSummary[]>(`/customers/?organization_id=${activeOrganization.id}`),
             apiClient.get<ItemSummary[]>(`/items/?organization_id=${activeOrganization.id}`)
@@ -145,24 +145,25 @@ const InvoiceEditorPage = () => {
                 setInvoiceNumber(inv.invoice_number);
                 setInvoiceDate(inv.invoice_date ? new Date(inv.invoice_date) : undefined);
                 setDueDate(inv.due_date ? new Date(inv.due_date) : undefined);
-                setCustomerId(inv.customer_id || CUSTOMER_PLACEHOLDER_VALUE); // Use placeholder if no customer
+                setCustomerId(inv.customer_id || CUSTOMER_PLACEHOLDER_VALUE);
                 setInvoiceType(inv.invoice_type);
                 setStatus(inv.status);
-                setCurrency(inv.currency);
+                setCurrency(inv.currency); 
+                setCurrencyInput(inv.currency); // Sync currencyInput with fetched currency
                 setTaxPercentage(inv.tax_percentage?.toString() || '');
                 setDiscountPercentage(inv.discount_percentage?.toString() || '');
                 setCommentsNotes(inv.comments_notes || '');
                 setLineItems(inv.line_items.map(li => ({
                     id: li.id,
                     _temp_id: uuidv4(),
-                    item_id: li.item_id || undefined, // Set to undefined if null/empty
+                    item_id: li.item_id || undefined,
                     item_description: li.item_description,
                     quantity_cartons: li.quantity_cartons?.toString() ?? '',
                     quantity_units: li.quantity_units?.toString() ?? '',
                     unit_type: li.unit_type || 'pieces',
                     price: li.price.toString(),
                     price_per_type: li.price_per_type,
-                    currency: li.currency,
+                    currency: inv.currency, 
                     item_specific_comments: li.item_specific_comments || '',
                 })));
             })
@@ -171,23 +172,25 @@ const InvoiceEditorPage = () => {
                 setError("Failed to load invoice data.");
             })
             .finally(() => setIsPageLoading(false));
-    } else { // Create mode
+    } else { 
         setInvoiceNumber('');
         setInvoiceDate(new Date());
         setDueDate(undefined);
-        setCustomerId(CUSTOMER_PLACEHOLDER_VALUE); // Reset to placeholder
+        setCustomerId(CUSTOMER_PLACEHOLDER_VALUE);
         setInvoiceType(InvoiceTypeEnum.COMMERCIAL);
         setStatus(InvoiceStatusEnum.DRAFT);
-        // setCurrency('USD'); // Retain existing or default 'USD'
+        setCurrency(INITIAL_CURRENCY); 
+        setCurrencyInput(INITIAL_CURRENCY); // Reset currencyInput
         setTaxPercentage('');
         setDiscountPercentage('');
         setCommentsNotes('');
-        if (lineItems.length === 0) {
-            addInitialLineItem();
+        // Initial line item is set by useState initializer if lineItems.length === 0 logic is removed from here
+        // For safety and clarity, ensure it's correctly initialized or re-initialized:
+        if (lineItems.length === 0 || !isEditMode) { // If create mode, ensure one item with current initial currency
+             setLineItems([createDefaultLineItem(INITIAL_CURRENCY)]);
         }
-        // isPageLoading for create mode is handled by the dropdown fetch useEffect
     }
-  }, [invoiceId, isEditMode, addInitialLineItem]);
+  }, [invoiceId, isEditMode]);
 
 
   // Recalculate totals
@@ -213,7 +216,7 @@ const InvoiceEditorPage = () => {
   
   const handlePredefinedItemSelect = (index: number, selectedItemId: string) => {
     const updatedLineItems = [...lineItems];
-    if (selectedItemId === ITEM_PLACEHOLDER_VALUE) { // Check against defined placeholder
+    if (selectedItemId === ITEM_PLACEHOLDER_VALUE) {
         updatedLineItems[index] = {
             ...updatedLineItems[index],
             item_id: undefined, 
@@ -227,7 +230,7 @@ const InvoiceEditorPage = () => {
                 item_description: selectedItem.name,
                 price: selectedItem.default_price?.toString() || '0',
                 unit_type: selectedItem.default_unit || 'pieces',
-                currency: currency, // Inherit from invoice's main currency
+                currency: currency, 
             };
         }
     }
@@ -235,16 +238,7 @@ const InvoiceEditorPage = () => {
   };
 
   const handleAddLineItem = useCallback(() => {
-    setLineItems(prevItems => [...prevItems, {
-        _temp_id: uuidv4(),
-        item_id: undefined, // Start with no predefined item selected
-        item_description: '',
-        quantity_units: '1',
-        unit_type: 'pieces',
-        price: '0',
-        price_per_type: PricePerTypeEnum.UNIT,
-        currency: currency,
-    }]);
+    setLineItems(prevItems => [...prevItems, createDefaultLineItem(currency)]);
   }, [currency]);
 
   const handleRemoveLineItem = (tempIdToRemove?: string, dbIdToRemove?: string) => {
@@ -252,9 +246,34 @@ const InvoiceEditorPage = () => {
         prevItems.filter(item => {
             if (tempIdToRemove) return item._temp_id !== tempIdToRemove;
             if (dbIdToRemove) return item.id !== dbIdToRemove;
-            return true; // Should not happen if one ID is always provided
+            return true; 
         })
     );
+  };
+
+  const handleMainCurrencyChange = (inputValue: string) => {
+    const upperValue = inputValue.toUpperCase();
+    setCurrencyInput(upperValue); // Always update the input field's display
+
+    if (upperValue.length === 3 && /^[A-Z]+$/.test(upperValue)) {
+      setCurrency(upperValue); 
+      setLineItems(prevLineItems => 
+          prevLineItems.map(li => ({ ...li, currency: upperValue }))
+      );
+    } else if (upperValue.length > 3) {
+        const validPart = upperValue.substring(0, 3);
+        setCurrencyInput(validPart);
+        if (/^[A-Z]+$/.test(validPart)) {
+            setCurrency(validPart);
+            setLineItems(prevLineItems => 
+                prevLineItems.map(li => ({ ...li, currency: validPart }))
+            );
+        }
+    } else if (inputValue === "") {
+        setCurrencyInput("");
+        // Optionally revert official currency to default or handle as error in submit
+        // setCurrency(INITIAL_CURRENCY); 
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -268,7 +287,7 @@ const InvoiceEditorPage = () => {
         setError("Active organization is required to create an invoice.");
         return;
     }
-    if (!customerId || customerId === CUSTOMER_PLACEHOLDER_VALUE) { // Check against placeholder
+    if (!customerId || customerId === CUSTOMER_PLACEHOLDER_VALUE) {
         setError("Customer is required. Please select a customer.");
         return;
     }
@@ -284,6 +303,10 @@ const InvoiceEditorPage = () => {
             setError("All line items must have a valid, non-negative price."); return;
         }
     }
+    if (!currency || currency.trim().length !== 3 || !/^[A-Z]+$/.test(currency)) { // Use validated 'currency' state
+        setError("A valid 3-letter uppercase currency code is required for the invoice.");
+        return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -298,7 +321,7 @@ const InvoiceEditorPage = () => {
         unit_type: li.unit_type,
         price: parseFloat(String(li.price)),
         price_per_type: li.price_per_type,
-        currency: li.currency,
+        currency: li.currency, 
         item_specific_comments: li.item_specific_comments || null,
     }));
 
@@ -309,7 +332,7 @@ const InvoiceEditorPage = () => {
         customer_id: finalCustomerId,
         invoice_type: invoiceType,
         status: status,
-        currency: currency,
+        currency: currency, // Use the validated main currency state
         tax_percentage: taxPercentage !== '' ? parseFloat(String(taxPercentage)) : null,
         discount_percentage: discountPercentage !== '' ? parseFloat(String(discountPercentage)) : null,
         comments_notes: commentsNotes || null,
@@ -337,10 +360,6 @@ const InvoiceEditorPage = () => {
     }
   };
   
-  // Friend's debugging log for Select item data:
-  // console.log("Current items for dropdown (from 'items' state):", JSON.parse(JSON.stringify(items)));
-  // console.log("Current customers for dropdown (from 'customers' state):", JSON.parse(JSON.stringify(customers)));
-
   if (isPageLoading) return <div className="text-center py-10">Loading...</div>;
   
   return (
@@ -360,7 +379,7 @@ const InvoiceEditorPage = () => {
                      <div>
                         <Label htmlFor="customer_id">Customer</Label>
                         <Select 
-                            value={customerId} // Will be CUSTOMER_PLACEHOLDER_VALUE or actual ID
+                            value={customerId} 
                             onValueChange={(value) => {
                                 setCustomerId(value); 
                             }}
@@ -407,7 +426,16 @@ const InvoiceEditorPage = () => {
                      </div>
                      <div>
                          <Label htmlFor="currency">Currency (e.g., USD)</Label>
-                         <Input id="currency" value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} maxLength={3} required className="mt-1" />
+                         <Input 
+                            id="currency" 
+                            value={currencyInput} 
+                            onChange={e => handleMainCurrencyChange(e.target.value)} 
+                            maxLength={3} // MaxLength is a good UX hint for user
+                            required 
+                            className="mt-1" 
+                            placeholder="USD"
+                            autoComplete="off" // Attempt to disable browser autocomplete
+                         />
                      </div>
                  </CardContent>
              </Card>
@@ -435,7 +463,7 @@ const InvoiceEditorPage = () => {
                                  <TableCell>
                                     <Select 
                                         onValueChange={(selectedItemId) => handlePredefinedItemSelect(index, selectedItemId)} 
-                                        value={item.item_id || ITEM_PLACEHOLDER_VALUE} // Use placeholder if no item_id
+                                        value={item.item_id || ITEM_PLACEHOLDER_VALUE}
                                     >
                                         <SelectTrigger><SelectValue placeholder="Select predefined item..." /></SelectTrigger>
                                         <SelectContent>
@@ -446,16 +474,10 @@ const InvoiceEditorPage = () => {
                                                 </SelectItem>
                                             )}
                                             {items.map((i, itemIndex) => {
-                                                // Aggressive check can be removed if confident in data or if it was for one-time debug.
-                                                // Keeping the check for this paste, but typically you'd remove it once issue is resolved.
-                                                if (typeof i.id !== 'string' || i.id.trim() === "") {
-                                                    console.error(`Problematic item at items[${itemIndex}] for SelectItem:`, JSON.stringify(i));
-                                                }
                                                 const itemValue = (typeof i.id === 'string' && i.id.trim() !== "") ? i.id : `invalid-item-id-${itemIndex}-${uuidv4()}`;
-
                                                 return (
                                                     <SelectItem key={itemValue} value={itemValue}> 
-                                                        {i.name} ({i.default_price ? `${currency} ${i.default_price.toFixed(2)}` : 'N/A'})
+                                                        {i.name} ({i.default_price ? `${item.currency} ${i.default_price.toFixed(2)}` : 'N/A'})
                                                     </SelectItem>
                                                 );
                                             })}
@@ -480,8 +502,10 @@ const InvoiceEditorPage = () => {
                                          </SelectContent>
                                      </Select>
                                  </TableCell>
-                                 <TableCell><Input value={item.currency || 'USD'} onChange={e => handleLineItemChange(index, 'currency', e.target.value.toUpperCase())} maxLength={3} className="w-full"/></TableCell>
-                                 <TableCell className="text-right font-medium">{currency} {calculateLineItemTotal(item).toFixed(2)}</TableCell>
+                                 <TableCell>
+                                     <Input value={item.currency || ''} readOnly disabled className="w-full bg-muted/50 border-dashed"/>
+                                 </TableCell>
+                                 <TableCell className="text-right font-medium">{item.currency || currency} {calculateLineItemTotal(item).toFixed(2)}</TableCell>
                                  <TableCell>
                                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveLineItem(item._temp_id, item.id)} 
                                         disabled={lineItems.length <= 1 && !isEditMode}

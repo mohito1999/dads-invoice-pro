@@ -21,8 +21,7 @@ class ItemUpdate(BaseModel): # All fields optional for update
     description: Optional[str] = None
     default_price: Optional[float] = Field(default=None, gt=0, allow_none=True) # Allow explicitly setting to None
     default_unit: Optional[str] = None
-    # organization_id: Optional[uuid.UUID] = None # Org link usually doesn't change
-    # image_urls: Optional[List[HttpUrl]] = None
+    image_url: Optional[HttpUrl] = None
 
 # Properties stored in DB
 class ItemInDBBase(ItemBase):
