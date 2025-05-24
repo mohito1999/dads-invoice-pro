@@ -13,7 +13,7 @@ import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, ImageOff } from "luc
 import { useOrg } from '@/contexts/OrgContext';
 import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
-
+import { toast } from 'sonner';
 const ItemsPage = () => {
   const { activeOrganization, isLoadingOrgs: isLoadingActiveOrg } = useOrg();
   const [items, setItems] = useState<ItemSummary[]>([]);
@@ -70,14 +70,14 @@ const ItemsPage = () => {
         setCurrentItem(response.data); 
         setIsFormModalOpen(true);
     } catch (err: any) { 
-        alert(err.response?.data?.detail || "Failed to load item details."); 
+        toast.error(err.response?.data?.detail || "Failed to load item details."); 
     }
   };
 
   const handleFormSuccess = (processedItem: Item) => {
     if (activeOrganization?.id) fetchItems(activeOrganization.id, searchTerm);
     setIsFormModalOpen(false);
-    alert(`Item "${processedItem.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
+    toast.success(`Item "${processedItem.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
   };
 
   const openDeleteConfirmDialog = (item: ItemSummary) => {
@@ -92,10 +92,10 @@ const ItemsPage = () => {
     try {
         await apiClient.delete(`/items/${itemToDelete.id}`);
         setItems(prevItems => prevItems.filter(i => i.id !== itemToDelete.id)); // Optimistic update
-        alert(`Item "${itemToDelete.name}" deleted successfully.`);
+        toast.success(`Item "${itemToDelete.name}" deleted successfully.`);
     } catch (err:any) { 
         setError(err.response?.data?.detail || "Failed to delete item.");
-        alert(err.response?.data?.detail || "Failed to delete item.");
+        toast.error(err.response?.data?.detail || "Failed to delete item.");
     }
     finally { 
         setIsDeleting(false);
@@ -281,7 +281,7 @@ const ItemsPage = () => {
             <AlertDialogAction 
                 onClick={handleConfirmDelete} 
                 disabled={isDeleting}
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                className="bg-destructive hover:bg-destructive/90 text-white"
             >
               {isDeleting ? "Deleting..." : "Yes, delete item"}
             </AlertDialogAction>

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const CustomersPage = () => {
   const { activeOrganization, isLoadingOrgs: isLoadingActiveOrg } = useOrg();
@@ -64,14 +65,14 @@ const CustomersPage = () => {
       setCurrentCustomer(response.data);
       setIsFormModalOpen(true);
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to load customer details.");
+      toast.error(err.response?.data?.detail || "Failed to load customer details.");
     }
   };
 
   const handleFormSuccess = (processedCustomer: Customer) => {
     if (activeOrganization?.id) fetchCustomers(activeOrganization.id);
     setIsFormModalOpen(false);
-    alert(`Customer "${processedCustomer.company_name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
+    toast.success(`Customer "${processedCustomer.company_name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
   };
 
   const openDeleteConfirmDialog = (customer: CustomerSummary) => {
@@ -88,10 +89,10 @@ const CustomersPage = () => {
       // Optimistic update:
       setCustomers(prevCustomers => prevCustomers.filter(c => c.id !== customerToDelete.id));
       // Or refetch: fetchCustomers(activeOrganization.id);
-      alert(`Customer "${customerToDelete.company_name}" deleted successfully.`);
+      toast.success(`Customer "${customerToDelete.company_name}" deleted successfully.`);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to delete customer.");
-      alert(err.response?.data?.detail || "Failed to delete customer.");
+      toast.error(err.response?.data?.detail || "Failed to delete customer.");
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
@@ -250,7 +251,7 @@ const CustomersPage = () => {
             <AlertDialogAction 
                 onClick={handleConfirmDelete} 
                 disabled={isDeleting}
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                className="bg-destructive hover:bg-destructive/90 text-white"
             >
               {isDeleting ? "Deleting..." : "Yes, delete customer"}
             </AlertDialogAction>

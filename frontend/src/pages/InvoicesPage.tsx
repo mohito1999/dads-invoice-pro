@@ -1,12 +1,15 @@
 // src/pages/InvoicesPage.tsx
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import apiClient from '@/services/apiClient';
-import { InvoiceSummary, InvoiceStatusEnum, InvoiceTypeEnum, CustomerSummary, OrganizationSummary } from '@/types';
+import { InvoiceSummary, InvoiceStatusEnum, InvoiceTypeEnum, CustomerSummary, OrganizationSummary, Invoice } from '@/types';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // For the new Dialog
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { 
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter // Added DialogFooter
+} from "@/components/ui/dialog";
 import { 
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, 
     DropdownMenuSeparator, DropdownMenuTrigger 
@@ -16,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
  } from "@/components/ui/alert-dialog";
 import { 
     MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, FileTextIcon, 
-    DownloadIcon, RefreshCwIcon, EyeIcon, SendIcon, FilterIcon, PackageIcon, SearchIcon, XIcon 
+    DownloadIcon, RefreshCwIcon, EyeIcon, SendIcon, FilterIcon, PackageIcon, SearchIcon, XIcon, DollarSignIcon 
  } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -24,6 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parseISO } from 'date-fns';
+import { toast } from 'sonner';
+import RecordPaymentForm from '@/components/invoices/RecordPaymentForm'; // Assuming this exists
 
 // Helper to get badge variant based on status
 const getStatusBadgeVariant = (status: InvoiceStatusEnum): "default" | "secondary" | "destructive" | "outline" => {
@@ -43,65 +48,59 @@ const formatEnumValueForDisplay = (enumValue: string): string => {
     return enumValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-// --- Define Unique Placeholder Values for Filters ---
 const ALL_STATUSES_PLACEHOLDER = "---ALL_STATUSES---";
 const ALL_CUSTOMERS_FILTER_PLACEHOLDER = "---ALL_CUSTOMERS_FILTER---";
-// No need for invoice number placeholder, empty string is fine.
-// Date pickers handle their own placeholder text.
 
 const InvoicesPage = () => {
   const { activeOrganization, isLoadingOrgs: isLoadingActiveOrg } = useOrg();
   const navigate = useNavigate();
   
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // General loading for list & actions
   const [error, setError] = useState<string | null>(null);
 
-  // --- Filter State ---
+  // Filter State
   const [customersForFilter, setCustomersForFilter] = useState<CustomerSummary[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>(ALL_STATUSES_PLACEHOLDER); // Use placeholder
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(ALL_CUSTOMERS_FILTER_PLACEHOLDER); // Use placeholder
+  const [selectedStatus, setSelectedStatus] = useState<string>(ALL_STATUSES_PLACEHOLDER);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(ALL_CUSTOMERS_FILTER_PLACEHOLDER);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [invoiceNumberSearch, setInvoiceNumberSearch] = useState<string>("");
-  // --- End Filter State ---
 
+  // Delete Confirmation state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<InvoiceSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Payment Modal state
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [invoiceForPayment, setInvoiceForPayment] = useState<InvoiceSummary | null>(null);
+
+  // --- State for "Transform to Commercial" AlertDialog ---
+  const [isTransformConfirmOpen, setIsTransformConfirmOpen] = useState(false);
+  const [invoiceToTransform, setInvoiceToTransform] = useState<InvoiceSummary | null>(null);
+
+  // --- State for "Generate Packing List" Dialogs ---
+  const [isPackingListNumberDialogOpen, setIsPackingListNumberDialogOpen] = useState(false); // For number input
+  const [isPackingListConfirmOpen, setIsPackingListConfirmOpen] = useState(false);      // For final confirmation
+  const [invoiceForPackingList, setInvoiceForPackingList] = useState<InvoiceSummary | null>(null);
+  const [newPackingListNumberInput, setNewPackingListNumberInput] = useState('');
+
 
   const fetchInvoices = useCallback(async () => {
      if (!activeOrganization?.id) {
-         setInvoices([]); 
-         setIsLoading(false);
-         return;
+         setInvoices([]); setIsLoading(false); return;
      }
-     setIsLoading(true);
-     setError(null);
+     setIsLoading(true); setError(null);
      try {
          const params = new URLSearchParams({ 
-             organization_id: activeOrganization.id, 
-             skip: "0", 
-             limit: "100" 
+             organization_id: activeOrganization.id, skip: "0", limit: "100" 
          });
-
-         // Check against placeholder before appending
-         if (selectedStatus && selectedStatus !== ALL_STATUSES_PLACEHOLDER && Object.values(InvoiceStatusEnum).includes(selectedStatus as InvoiceStatusEnum)) {
-             params.append('status', selectedStatus);
-         }
-         if (selectedCustomerId && selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER) {
-             params.append('customer_id', selectedCustomerId);
-         }
-         if (dateFrom) {
-             params.append('date_from', format(dateFrom, 'yyyy-MM-dd'));
-         }
-         if (dateTo) {
-             params.append('date_to', format(dateTo, 'yyyy-MM-dd'));
-         }
-         if (invoiceNumberSearch.trim() !== "") {
-             params.append('invoice_number_search', invoiceNumberSearch.trim());
-         }
+         if (selectedStatus && selectedStatus !== ALL_STATUSES_PLACEHOLDER) params.append('status', selectedStatus);
+         if (selectedCustomerId && selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER) params.append('customer_id', selectedCustomerId);
+         if (dateFrom) params.append('date_from', format(dateFrom, 'yyyy-MM-dd'));
+         if (dateTo) params.append('date_to', format(dateTo, 'yyyy-MM-dd'));
+         if (invoiceNumberSearch.trim() !== "") params.append('invoice_number_search', invoiceNumberSearch.trim());
 
          const response = await apiClient.get<InvoiceSummary[]>(`/invoices/?${params.toString()}`);
          setInvoices(response.data);
@@ -118,10 +117,7 @@ const InvoicesPage = () => {
     if (activeOrganization?.id) {
         apiClient.get<CustomerSummary[]>(`/customers/?organization_id=${activeOrganization.id}&limit=1000`)
             .then(res => setCustomersForFilter(res.data))
-            .catch(err => {
-                console.error("Failed to fetch customers for filter:", err);
-                setCustomersForFilter([]);
-            });
+            .catch(err => { console.error("Failed to fetch customers for filter:", err); setCustomersForFilter([]); });
     } else if (!isLoadingActiveOrg) {
         setCustomersForFilter([]);
     }
@@ -135,23 +131,19 @@ const InvoicesPage = () => {
     }
   }, [activeOrganization, isLoadingActiveOrg, fetchInvoices]);
 
-  const handleCreateInvoice = () => { /* ... (same as before) ... */ 
-    if (activeOrganization) {
-        navigate(`/invoices/new?orgId=${activeOrganization.id}`);
-    } else {
-        alert("Please select an active organization first.");
-    }
+  const handleCreateInvoice = () => {
+    if (activeOrganization) navigate(`/invoices/new?orgId=${activeOrganization.id}`);
+    else toast.error("Please select an active organization first.");
   };
-  const handleEditInvoice = (invoiceId: string) => { /* ... (same as before) ... */ 
-    navigate(`/invoices/edit/${invoiceId}`);
-  };
+  const handleEditInvoice = (invoiceId: string) => navigate(`/invoices/edit/${invoiceId}`);
+  
   const handleDownloadDocumentPdf = async (invoiceId: string, invoiceNumber: string, docType: 'invoice' | 'packing-list') => { /* ... (same as before) ... */ 
     const endpoint = docType === 'packing-list' 
       ? `/invoices/${invoiceId}/packing-list-pdf` 
       : `/invoices/${invoiceId}/pdf`;
     const prefix = docType === 'packing-list' ? 'PackingList' : 'Invoice';
+    const GIsLoading = toast.loading(`Downloading ${prefix} PDF...`);
     try {
-        setIsLoading(true); 
         const response = await apiClient.get(endpoint, { responseType: 'blob' });
         const blob = new Blob([response.data], { type: 'application/pdf' });
         const link = document.createElement('a');
@@ -161,70 +153,115 @@ const InvoicesPage = () => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(link.href);
+        toast.success(`${prefix} PDF downloaded.`, { id: GIsLoading });
     } catch (err: any) { 
         console.error(`Failed to download ${prefix} PDF:`, err);
-        alert(err.response?.data?.detail || `Failed to download ${prefix} PDF.`);
-    } finally {
-        setIsLoading(false);
+        toast.error(err.response?.data?.detail || `Failed to download ${prefix} PDF.`, { id: GIsLoading });
     }
   };
-  const handleTransformToCommercial = async (invoiceId: string) => { /* ... (same as before) ... */
-    if(!confirm("This will create a new Commercial Invoice based on this Pro Forma. Continue?")) return;
-    try {
-        setIsLoading(true);
-        const response = await apiClient.post(`/invoices/${invoiceId}/transform-to-commercial`);
-        alert(`Successfully transformed to Commercial Invoice: ${response.data.invoice_number}`);
-        if(activeOrganization?.id) fetchInvoices(); // Use callback
-    } catch (err: any) { alert(err.response?.data?.detail || "Failed to transform invoice."); }
-    finally { setIsLoading(false); }
+
+  // --- "Transform to Commercial" Handlers ---
+  const openTransformConfirmDialog = (inv: InvoiceSummary) => {
+    setInvoiceToTransform(inv);
+    setIsTransformConfirmOpen(true);
   };
-  const handleGeneratePackingList = async (commercialInvoiceId: string, commercialInvoiceNumber: string) => { /* ... (same as before) ... */ 
-    if (!confirm(`Generate a Packing List based on Commercial Invoice ${commercialInvoiceNumber}?`)) return;
-    const newPackingListNumber = prompt("Optional: Enter a specific number for the new Packing List (or leave blank for default):");
+
+  const proceedWithTransformToCommercial = async () => {
+    if (!invoiceToTransform) return;
+    const GIsLoading = toast.loading("Transforming to Commercial Invoice...");
     try {
-      setIsLoading(true);
-      const response = await apiClient.post(`/invoices/${commercialInvoiceId}/generate-packing-list`, null, {
-          params: newPackingListNumber ? { new_packing_list_number: newPackingListNumber } : {}
-      });
-      alert(`Successfully generated Packing List: ${response.data.invoice_number}`);
-      if (activeOrganization?.id) fetchInvoices(); // Use callback
-    } catch (err: any) { alert(err.response?.data?.detail || "Failed to generate Packing List."); console.error("Packing List generation error:", err); }
-    finally { setIsLoading(false); }
+      const response = await apiClient.post(`/invoices/${invoiceToTransform.id}/transform-to-commercial`);
+      toast.success(`Successfully transformed "${invoiceToTransform.invoice_number}" to Commercial Invoice: ${response.data.invoice_number}`, { id: GIsLoading });
+      if (activeOrganization?.id) fetchInvoices();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Failed to transform invoice.", { id: GIsLoading });
+      console.error("Transform invoice error:", err);
+    } finally {
+      setIsTransformConfirmOpen(false);
+      setInvoiceToTransform(null);
+    }
   };
-  const openDeleteConfirmDialog = (invToDelete: InvoiceSummary) => { /* ... (same as before) ... */ 
+  // --- End "Transform to Commercial" Handlers ---
+
+  // --- "Generate Packing List" Handlers ---
+  const openPackingListNumberDialog = (inv: InvoiceSummary) => {
+    setInvoiceForPackingList(inv);
+    setNewPackingListNumberInput(''); 
+    setIsPackingListNumberDialogOpen(true);
+  };
+
+  const proceedToGeneratePackingListConfirm = () => {
+    setIsPackingListNumberDialogOpen(false); 
+    setIsPackingListConfirmOpen(true); 
+  };
+
+  const executePackingListGeneration = async () => {
+    if (!invoiceForPackingList) return;
+    const GIsLoading = toast.loading("Generating Packing List...");
+    try {
+      const response = await apiClient.post(
+        `/invoices/${invoiceForPackingList.id}/generate-packing-list`, 
+        null,
+        {
+          params: newPackingListNumberInput.trim() ? { new_invoice_number: newPackingListNumberInput.trim() } : {}
+        }
+      );
+      toast.success(`Successfully generated Packing List: ${response.data.invoice_number}`, { id: GIsLoading });
+      if (activeOrganization?.id) fetchInvoices();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Failed to generate Packing List.", { id: GIsLoading });
+      console.error("Packing List generation error:", err);
+    } finally {
+      setIsPackingListConfirmOpen(false);
+      setInvoiceForPackingList(null);
+      setNewPackingListNumberInput('');
+    }
+  };
+  // --- End "Generate Packing List" Handlers ---
+
+  const openDeleteConfirmDialog = (invToDelete: InvoiceSummary) => { 
     setInvoiceToDelete(invToDelete); setIsDeleteDialogOpen(true);
   };
-  const handleConfirmDelete = async () => {  /* ... (same as before, but ensure fetchInvoices is called if using callback) ... */ 
+  const handleConfirmDelete = async () => {  
     if (!invoiceToDelete) return;
-    setIsDeleting(true);
-    setError(null);
+    setIsDeleting(true); setError(null);
+    const GIsLoading = toast.loading(`Deleting invoice ${invoiceToDelete.invoice_number}...`)
     try {
         await apiClient.delete(`/invoices/${invoiceToDelete.id}`);
-        alert(`Invoice "${invoiceToDelete.invoice_number}" deleted successfully.`);
-        fetchInvoices(); // Re-fetch after delete
+        toast.success(`Invoice "${invoiceToDelete.invoice_number}" deleted successfully.`, { id: GIsLoading });
+        fetchInvoices();
     } catch (err:any) { 
         const errorMsg = err.response?.data?.detail || "Failed to delete invoice.";
         setError(errorMsg); 
-        alert(errorMsg);
+        toast.error(errorMsg, { id: GIsLoading });
     }
     finally { 
-        setIsDeleting(false);
-        setIsDeleteDialogOpen(false);
-        setInvoiceToDelete(null);
+        setIsDeleting(false); setIsDeleteDialogOpen(false); setInvoiceToDelete(null);
      }
   };
 
  const clearFilters = () => {
-     setSelectedStatus(ALL_STATUSES_PLACEHOLDER); // Reset to placeholder
-     setSelectedCustomerId(ALL_CUSTOMERS_FILTER_PLACEHOLDER); // Reset to placeholder
+     setSelectedStatus(ALL_STATUSES_PLACEHOLDER);
+     setSelectedCustomerId(ALL_CUSTOMERS_FILTER_PLACEHOLDER);
      setDateFrom(undefined);
      setDateTo(undefined);
      setInvoiceNumberSearch("");
-     // fetchInvoices will be called by useEffect due to these state changes triggering its dependencies
+ };
+
+ const handleOpenPaymentModal = (invoice: InvoiceSummary) => {
+    setInvoiceForPayment(invoice);
+    setIsPaymentModalOpen(true);
+ };
+
+ const handlePaymentRecorded = (updatedInvoice: Invoice) => {
+  fetchInvoices(); 
+  setIsPaymentModalOpen(false);
+  setInvoiceForPayment(null);
+  toast.success(`Payment recorded for invoice ${updatedInvoice.invoice_number}. Status: ${updatedInvoice.status}`);
  };
 
   if (isLoadingActiveOrg) return <div className="container mx-auto px-4 py-10 text-center">Loading organization context...</div>;
-  if (!activeOrganization) return (
+  if (!activeOrganization) return ( /* ... No Active Organization Card ... */ 
     <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       <div className="flex justify-between items-center"> <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1> </div>
       <Card className="w-full">
@@ -254,126 +291,53 @@ const InvoicesPage = () => {
                      <Label htmlFor="invoiceNumberSearch">Search #</Label>
                      <div className="relative mt-1">
                          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                         <Input 
-                             id="invoiceNumberSearch"
-                             placeholder="e.g., INV-001"
-                             value={invoiceNumberSearch}
-                             onChange={(e) => setInvoiceNumberSearch(e.target.value)}
-                             className="pl-9"
-                         />
-                         {invoiceNumberSearch && (
-                             <Button variant="ghost" size="icon" className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-8" onClick={() => setInvoiceNumberSearch('')}>
-                                 <XIcon className="h-4 w-4" />
-                             </Button>
-                         )}
+                         <Input id="invoiceNumberSearch" placeholder="e.g., INV-001" value={invoiceNumberSearch} onChange={(e) => setInvoiceNumberSearch(e.target.value)} className="pl-9"/>
+                         {invoiceNumberSearch && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-8" onClick={() => setInvoiceNumberSearch('')}><XIcon className="h-4 w-4" /></Button>)}
                      </div>
                  </div>
                  <div>
                      <Label htmlFor="customerFilter">Customer</Label>
-                     <Select 
-                        value={selectedCustomerId} 
-                        onValueChange={setSelectedCustomerId}
-                     >
+                     <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                          <SelectTrigger id="customerFilter" className="mt-1"><SelectValue placeholder="All Customers" /></SelectTrigger>
                          <SelectContent>
                              <SelectItem value={ALL_CUSTOMERS_FILTER_PLACEHOLDER}>All Customers</SelectItem>
-                             {customersForFilter.map(c => (
-                                 <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                             ))}
+                             {customersForFilter.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
                          </SelectContent>
                      </Select>
                  </div>
                  <div>
                      <Label htmlFor="statusFilter">Status</Label>
-                     <Select 
-                        value={selectedStatus} 
-                        onValueChange={setSelectedStatus}
-                     >
+                     <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                          <SelectTrigger id="statusFilter" className="mt-1"><SelectValue placeholder="All Statuses" /></SelectTrigger>
                          <SelectContent>
-                             <SelectItem value={ALL_STATUSES_PLACEHOLDER}>All Statuses</SelectItem> {/* Use placeholder value */}
-                             {Object.values(InvoiceStatusEnum).map(s => (
-                                 <SelectItem key={s} value={s.valueOf()}>
-                                     {formatEnumValueForDisplay(s.valueOf())}
-                                 </SelectItem>
-                             ))}
+                             <SelectItem value={ALL_STATUSES_PLACEHOLDER}>All Statuses</SelectItem>
+                             {Object.values(InvoiceStatusEnum).map(s => (<SelectItem key={s} value={s.valueOf()}>{formatEnumValueForDisplay(s.valueOf())}</SelectItem>))}
                          </SelectContent>
                      </Select>
                  </div>
-                 <div>
-                     <Label htmlFor="dateFromFilter">Date From</Label>
-                     <DatePicker date={dateFrom} onDateChange={setDateFrom} className="mt-1" placeholderText="Start Date" />
-                 </div>
-                 <div>
-                     <Label htmlFor="dateToFilter">Date To</Label>
-                     <DatePicker date={dateTo} onDateChange={setDateTo} className="mt-1" placeholderText="End Date" />
-                 </div>
+                 <div><Label htmlFor="dateFromFilter">Date From</Label><DatePicker date={dateFrom} onDateChange={setDateFrom} className="mt-1" placeholderText="Start Date" /></div>
+                 <div><Label htmlFor="dateToFilter">Date To</Label><DatePicker date={dateTo} onDateChange={setDateTo} className="mt-1" placeholderText="End Date" /></div>
              </div>
-             <div className="flex justify-end mt-4">
-                  <Button onClick={clearFilters} variant="ghost" size="sm">
-                    <XIcon className="mr-2 h-4 w-4" /> Clear Filters
-                  </Button>
-             </div>
+             <div className="flex justify-end mt-4"><Button onClick={clearFilters} variant="ghost" size="sm"><XIcon className="mr-2 h-4 w-4" /> Clear Filters</Button></div>
          </CardContent>
       </Card>
 
-      {isLoading && (
-        <Card className="w-full">
-            <CardContent className="py-10 text-center">Loading invoices...</CardContent>
-        </Card>
-      )}
-
-      {!isLoading && error && (
-         <Card className="w-full">
-            <CardHeader><CardTitle>Error</CardTitle></CardHeader>
-            <CardContent className="py-10">
-                <p className="text-center text-destructive">{error}</p>
-            </CardContent>
-         </Card>
-      )}
-      
+      {isLoading && (<Card className="w-full"><CardContent className="py-10 text-center">Loading invoices...</CardContent></Card>)}
+      {!isLoading && error && (<Card className="w-full"><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent className="py-10"><p className="text-center text-destructive">{error}</p></CardContent></Card>)}
       {!isLoading && !error && invoices.length === 0 && (
         <Card className="w-full">
-            <CardHeader>
-                <CardTitle>No Invoices Found</CardTitle>
-                <CardDescription>
-                    {invoiceNumberSearch || selectedStatus !== ALL_STATUSES_PLACEHOLDER || selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER || dateFrom || dateTo 
-                        ? "No invoices match your current filter criteria." 
-                        : `No invoices found for ${activeOrganization.name}.`}
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="py-10 text-center">
-                <FileTextIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">
-                    {invoiceNumberSearch || selectedStatus !== ALL_STATUSES_PLACEHOLDER || selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER || dateFrom || dateTo
-                        ? "Try adjusting your filters or create a new invoice."
-                        : "Get started by creating your first invoice for this organization."}
-                </p>
-                <Button onClick={handleCreateInvoice}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Create Invoice
-                </Button>
-            </CardContent>
+            <CardHeader><CardTitle>No Invoices Found</CardTitle><CardDescription>{invoiceNumberSearch || selectedStatus !== ALL_STATUSES_PLACEHOLDER || selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER || dateFrom || dateTo ? "No invoices match your current filter criteria." : `No invoices found for ${activeOrganization.name}.`}</CardDescription></CardHeader>
+            <CardContent className="py-10 text-center"><FileTextIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><p className="text-muted-foreground mb-4">{invoiceNumberSearch || selectedStatus !== ALL_STATUSES_PLACEHOLDER || selectedCustomerId !== ALL_CUSTOMERS_FILTER_PLACEHOLDER || dateFrom || dateTo ? "Try adjusting your filters or create a new invoice." : "Get started by creating your first invoice for this organization."}</p><Button onClick={handleCreateInvoice}><PlusCircle className="mr-2 h-4 w-4" /> Create Invoice</Button></CardContent>
         </Card>
       )}
 
       {!isLoading && !error && invoices.length > 0 && (
         <Card className="w-full">
-          <CardHeader>
-          </CardHeader>
+          <CardHeader>{/* Optional Title */}</CardHeader>
           <CardContent className="p-0 sm:p-6">
             <div className="rounded-md border overflow-x-auto">
                 <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Number</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="hidden sm:table-cell">Customer</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="text-right pr-2 sm:pr-4">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow><TableHead>Number</TableHead><TableHead>Date</TableHead><TableHead className="hidden sm:table-cell">Customer</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right pr-2 sm:pr-4">Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
                     {invoices.map((inv) => (
                             <TableRow key={inv.id}>
@@ -389,24 +353,13 @@ const InvoicesPage = () => {
                                     <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem onClick={() => handleDownloadDocumentPdf(inv.id, inv.invoice_number, 'invoice')} className="cursor-pointer"><DownloadIcon className="mr-2 h-4 w-4" />Download Invoice PDF</DropdownMenuItem>
-                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.PACKING_LIST.valueOf() && ( // Compare string values
-                                        <DropdownMenuItem onClick={() => handleDownloadDocumentPdf(inv.id, inv.invoice_number, 'packing-list')} className="cursor-pointer">
-                                            <DownloadIcon className="mr-2 h-4 w-4" /> Download Packing List PDF
-                                        </DropdownMenuItem>
-                                    )}
+                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.PACKING_LIST.valueOf() && (<DropdownMenuItem onClick={() => handleDownloadDocumentPdf(inv.id, inv.invoice_number, 'packing-list')} className="cursor-pointer"><DownloadIcon className="mr-2 h-4 w-4" /> Download Packing List PDF</DropdownMenuItem>)}
                                     <DropdownMenuItem onClick={() => handleEditInvoice(inv.id)} className="cursor-pointer"><Edit2Icon className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.PRO_FORMA.valueOf() && inv.status !== InvoiceStatusEnum.CANCELLED && ( // Compare string values
-                                        <DropdownMenuItem onClick={() => handleTransformToCommercial(inv.id)} className="cursor-pointer"><RefreshCwIcon className="mr-2 h-4 w-4" />To Commercial</DropdownMenuItem>
-                                    )}
-                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.COMMERCIAL.valueOf() && inv.status !== InvoiceStatusEnum.CANCELLED && ( // Compare string values
-                                        <DropdownMenuItem onClick={() => handleGeneratePackingList(inv.id, inv.invoice_number)} className="cursor-pointer">
-                                            <PackageIcon className="mr-2 h-4 w-4" /> Generate Packing List
-                                        </DropdownMenuItem>
-                                    )}
+                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.PRO_FORMA.valueOf() && inv.status !== InvoiceStatusEnum.CANCELLED && (<DropdownMenuItem onClick={() => openTransformConfirmDialog(inv)} className="cursor-pointer"><RefreshCwIcon className="mr-2 h-4 w-4" />To Commercial</DropdownMenuItem>)}
+                                    {inv.invoice_type.valueOf() === InvoiceTypeEnum.COMMERCIAL.valueOf() && inv.status !== InvoiceStatusEnum.CANCELLED && (<DropdownMenuItem onClick={() => openPackingListNumberDialog(inv)} className="cursor-pointer"><PackageIcon className="mr-2 h-4 w-4" /> Generate Packing List</DropdownMenuItem>)}
+                                    {(inv.status === InvoiceStatusEnum.UNPAID || inv.status === InvoiceStatusEnum.PARTIALLY_PAID || inv.status === InvoiceStatusEnum.OVERDUE) && (<DropdownMenuItem onClick={() => handleOpenPaymentModal(inv)} className="cursor-pointer"><DollarSignIcon className="mr-2 h-4 w-4" /> Record Payment</DropdownMenuItem>)}
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer" onClick={() => openDeleteConfirmDialog(inv)}>
-                                        <Trash2Icon className="mr-2 h-4 w-4" />Delete
-                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer" onClick={() => openDeleteConfirmDialog(inv)}><Trash2Icon className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                 </TableCell>
@@ -420,23 +373,98 @@ const InvoicesPage = () => {
         </Card>
       )}
       
+      {/* Payment Recording Dialog */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Record Payment for Invoice {invoiceForPayment?.invoice_number}</DialogTitle>
+                <DialogDescription>Current Total: {invoiceForPayment?.currency} {invoiceForPayment?.total_amount.toFixed(2)}</DialogDescription>
+            </DialogHeader>
+            {invoiceForPayment && (<RecordPaymentForm invoice={invoiceForPayment} onSuccess={handlePaymentRecorded} onCancel={() => {setIsPaymentModalOpen(false); setInvoiceForPayment(null);}}/>)}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation AlertDialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete invoice "
-              <strong>{invoiceToDelete?.invoice_number || ''}</strong>".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setInvoiceToDelete(null); setIsDeleteDialogOpen(false); }}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-              {isDeleting ? "Deleting..." : "Yes, delete invoice"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete invoice "<strong>{invoiceToDelete?.invoice_number || ''}</strong>".</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel onClick={() => { setInvoiceToDelete(null); setIsDeleteDialogOpen(false); }}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90 text-white">{isDeleting ? "Deleting..." : "Yes, delete invoice"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Transform to Commercial Confirmation Dialog */}
+      {invoiceToTransform && (
+        <AlertDialog open={isTransformConfirmOpen} onOpenChange={setIsTransformConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Transformation</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will create a new Commercial Invoice based on Pro Forma Invoice "<strong>{invoiceToTransform.invoice_number}</strong>". The original Pro Forma will remain unchanged.
+                <br /><br />
+                Are you sure you want to continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {setInvoiceToTransform(null); setIsTransformConfirmOpen(false);}}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={proceedWithTransformToCommercial} disabled={isLoading} >
+                {isLoading ? "Transforming..." : "Yes, Transform"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Dialog to Enter Optional Packing List Number */}
+      {invoiceForPackingList && (
+        <Dialog open={isPackingListNumberDialogOpen} onOpenChange={(isOpen) => {
+            setIsPackingListNumberDialogOpen(isOpen);
+            if (!isOpen) setInvoiceForPackingList(null); // Clear context if dialog is closed
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Generate Packing List for {invoiceForPackingList.invoice_number}</DialogTitle>
+              <DialogDescription>Optionally enter a specific number for the new Packing List. Leave blank to use a default number generated by the system.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="packingListNumberInput" className="text-right col-span-1">PL Number</Label>
+                <Input id="packingListNumberInput" value={newPackingListNumberInput} onChange={(e) => setNewPackingListNumberInput(e.target.value)} className="col-span-3" placeholder="e.g., PL-XYZ-001 (Optional)"/>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {setIsPackingListNumberDialogOpen(false); setInvoiceForPackingList(null);}}>Cancel</Button>
+              <Button onClick={proceedToGeneratePackingListConfirm}>Next: Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Final Confirmation AlertDialog for Generating Packing List */}
+      {invoiceForPackingList && (
+        <AlertDialog open={isPackingListConfirmOpen} onOpenChange={(isOpen) => {
+            setIsPackingListConfirmOpen(isOpen);
+            if (!isOpen) { // If closing confirm dialog, also clear related states
+                 setInvoiceForPackingList(null); 
+                 setNewPackingListNumberInput('');
+            }
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Packing List Generation</AlertDialogTitle>
+              <AlertDialogDescription>
+                Generate a Packing List based on Commercial Invoice "<strong>{invoiceForPackingList.invoice_number}</strong>"?
+                {newPackingListNumberInput.trim() && (<><br />It will be numbered: <strong>{newPackingListNumberInput.trim()}</strong>.</>)}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {setIsPackingListConfirmOpen(false); setInvoiceForPackingList(null); setNewPackingListNumberInput('');}}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={executePackingListGeneration} disabled={isLoading}>
+                {isLoading ? "Generating..." : "Yes, Generate"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 };

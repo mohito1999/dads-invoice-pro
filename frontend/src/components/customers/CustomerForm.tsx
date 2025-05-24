@@ -100,27 +100,27 @@ const CustomerForm = ({ mode, initialData, onSuccess, onCancel }: CustomerFormPr
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="company_name">Company Name</Label>
-        <Input id="company_name" name="company_name" value={formData.company_name} onChange={handleChange} required disabled={isLoading} className="mt-1" />
+        <Input id="company_name" name="company_name" value={formData.company_name} onChange={handleChange} required disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="poc_name">POC Name</Label>
-        <Input id="poc_name" name="poc_name" value={formData.poc_name} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="poc_name" name="poc_name" value={formData.poc_name} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="phone_number">Phone Number</Label>
-        <Input id="phone_number" name="phone_number" value={formData.phone_number} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="phone_number" name="phone_number" value={formData.phone_number} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="billing_address_line1">Address Line 1</Label>
-        <Input id="billing_address_line1" name="billing_address_line1" value={formData.billing_address_line1} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="billing_address_line1" name="billing_address_line1" value={formData.billing_address_line1} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="billing_city">City</Label>
-        <Input id="billing_city" name="billing_city" value={formData.billing_city} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="billing_city" name="billing_city" value={formData.billing_city} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       {/* Add more fields for address, state, zip, country etc. */}
 

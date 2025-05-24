@@ -113,49 +113,49 @@ const OrganizationForm = ({ mode, initialData, onSuccess, onCancel }: Organizati
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="name">Organization Name <span className="text-destructive">*</span></Label>
-        <Input id="name" name="name" value={formData.name} onChange={handleChange} required disabled={isLoading} className="mt-1" />
+        <Input id="name" name="name" value={formData.name} onChange={handleChange} required disabled={isLoading} className="mt-2" />
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="contact_email">Contact Email</Label>
-          <Input id="contact_email" name="contact_email" type="email" value={formData.contact_email} onChange={handleChange} disabled={isLoading} className="mt-1" />
+          <Input id="contact_email" name="contact_email" type="email" value={formData.contact_email} onChange={handleChange} disabled={isLoading} className="mt-2" />
         </div>
         <div> {/* NEW FIELD */}
           <Label htmlFor="contact_phone">Contact Phone</Label>
-          <Input id="contact_phone" name="contact_phone" type="tel" value={formData.contact_phone} onChange={handleChange} disabled={isLoading} className="mt-1" />
+          <Input id="contact_phone" name="contact_phone" type="tel" value={formData.contact_phone} onChange={handleChange} disabled={isLoading} className="mt-2" />
         </div>
       </div>
 
       <div>
         <Label htmlFor="address_line1">Address Line 1</Label>
-        <Input id="address_line1" name="address_line1" value={formData.address_line1} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="address_line1" name="address_line1" value={formData.address_line1} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="address_line2">Address Line 2</Label>
-        <Input id="address_line2" name="address_line2" value={formData.address_line2} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="address_line2" name="address_line2" value={formData.address_line2} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <div>
           <Label htmlFor="city">City</Label>
-          <Input id="city" name="city" value={formData.city} onChange={handleChange} disabled={isLoading} className="mt-1" />
+          <Input id="city" name="city" value={formData.city} onChange={handleChange} disabled={isLoading} className="mt-2" />
         </div>
         <div>
           <Label htmlFor="state_province_region">State/Province/Region</Label>
-          <Input id="state_province_region" name="state_province_region" value={formData.state_province_region} onChange={handleChange} disabled={isLoading} className="mt-1" />
+          <Input id="state_province_region" name="state_province_region" value={formData.state_province_region} onChange={handleChange} disabled={isLoading} className="mt-2" />
         </div>
         <div>
           <Label htmlFor="zip_code">Zip/Postal Code</Label>
-          <Input id="zip_code" name="zip_code" value={formData.zip_code} onChange={handleChange} disabled={isLoading} className="mt-1" />
+          <Input id="zip_code" name="zip_code" value={formData.zip_code} onChange={handleChange} disabled={isLoading} className="mt-2" />
         </div>
       </div>
       <div>
         <Label htmlFor="country">Country</Label>
-        <Input id="country" name="country" value={formData.country} onChange={handleChange} disabled={isLoading} className="mt-1" />
+        <Input id="country" name="country" value={formData.country} onChange={handleChange} disabled={isLoading} className="mt-2" />
       </div>
       <div>
         <Label htmlFor="logo_url">Logo URL (Optional)</Label>
-        <Input id="logo_url" name="logo_url" type="url" value={formData.logo_url} onChange={handleChange} disabled={isLoading} className="mt-1" placeholder="https://example.com/logo.png" />
+        <Input id="logo_url" name="logo_url" type="url" value={formData.logo_url} onChange={handleChange} disabled={isLoading} className="mt-2" placeholder="https://example.com/logo.png" />
       </div>
 
       {error && <p className="text-sm text-destructive text-center">{error}</p>}

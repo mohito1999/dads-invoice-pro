@@ -126,7 +126,7 @@ const ItemForm = ({ mode, initialData, organizationId, onSuccess, onCancel }: It
           onChange={handleChange} 
           required 
           disabled={isLoading} 
-          className="mt-1" 
+          className="mt-2" 
         />
       </div>
       <div>
@@ -137,7 +137,7 @@ const ItemForm = ({ mode, initialData, organizationId, onSuccess, onCancel }: It
           value={formData.description || ''} 
           onChange={handleChange} 
           disabled={isLoading} 
-          className="mt-1" 
+          className="mt-2" 
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -152,7 +152,7 @@ const ItemForm = ({ mode, initialData, organizationId, onSuccess, onCancel }: It
             value={formData.default_price || ''} 
             onChange={handleChange} 
             disabled={isLoading} 
-            className="mt-1" 
+            className="mt-2" 
             placeholder="e.g., 10.99"
           />
         </div>
@@ -164,7 +164,7 @@ const ItemForm = ({ mode, initialData, organizationId, onSuccess, onCancel }: It
             value={formData.default_unit || ''} 
             onChange={handleChange} 
             disabled={isLoading} 
-            className="mt-1" 
+            className="mt-2" 
             placeholder="e.g., piece, kg, hour"
           />
         </div>
@@ -178,7 +178,7 @@ const ItemForm = ({ mode, initialData, organizationId, onSuccess, onCancel }: It
           value={formData.image_url || ''} 
           onChange={handleChange} 
           disabled={isLoading} 
-          className="mt-1" 
+          className="mt-2" 
           placeholder="https://example.com/image.png"
         />
       </div>

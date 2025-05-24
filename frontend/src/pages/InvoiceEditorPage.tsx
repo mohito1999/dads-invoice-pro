@@ -18,6 +18,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2Icon, PlusCircleIcon } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext';
+import { toast } from 'sonner';
 // import { useAuth } from '@/contexts/AuthContext';
 
 // --- Define Placeholder Values ---
@@ -381,7 +382,7 @@ const InvoiceEditorPage = () => {
         } else {
             await apiClient.post<Invoice>('/invoices/', payload as InvoiceCreate);
         }
-        alert(`Invoice ${isEditMode ? 'updated' : 'created'} successfully!`);
+        toast.success(`Invoice ${isEditMode ? 'updated' : 'created'} successfully!`);       
         navigate('/invoices'); 
     } catch (err: any) {
         console.error(`Failed to ${isEditMode ? 'update' : 'create'} invoice:`, err);
@@ -399,7 +400,7 @@ const InvoiceEditorPage = () => {
              {isEditMode ? `Edit Invoice ${invoiceNumber || ''}` : `Create New Invoice for ${activeOrganization?.name || 'Selected Organization'}`}
          </h1>
 
-         <form onSubmit={handleSubmit}>
+         <form onSubmit={handleSubmit} className="space-y-6">
              <Card>
                  <CardHeader><CardTitle>Invoice Details</CardTitle></CardHeader>
                  <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-6">

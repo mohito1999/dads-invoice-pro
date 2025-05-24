@@ -183,3 +183,9 @@ class InvoiceSummary(BaseModel): # For lists
 
     class Config:
         from_attributes = True
+
+class PaymentRecordIn(BaseModel):
+    amount_paid_now: float = Field(..., gt=0, description="The amount being paid in this transaction.")
+    payment_date: date = Field(default_factory=date.today, description="Date the payment was received.")
+    payment_method: Optional[str] = Field(default=None, max_length=100, description="e.g., Bank Transfer, Cash, Card")
+    notes: Optional[str] = Field(default=None, description="Optional notes for this payment transaction.")

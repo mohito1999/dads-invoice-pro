@@ -27,6 +27,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
 import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, EyeIcon } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext'; // Assuming this is used for isLoadingActiveOrg
+import { toast } from 'sonner';
 
 const OrganizationsPage = () => {
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
@@ -75,7 +76,7 @@ const OrganizationsPage = () => {
       setIsFormModalOpen(true);
     } catch (err: any) {
       console.error("Failed to fetch organization details for edit:", err);
-      alert(err.response?.data?.detail || "Failed to load organization details. Please try again.");
+      toast.error(err.response?.data?.detail || "Failed to load organization details. Please try again.");
     }
   };
 
@@ -83,7 +84,7 @@ const OrganizationsPage = () => {
     fetchOrganizations();
     await refreshUserOrganizations();
     setIsFormModalOpen(false);
-    alert(`Organization "${processedOrganization.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
+    toast.success(`Organization "${processedOrganization.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
   };
 
   const openDeleteConfirmDialog = (org: OrganizationSummary) => {
@@ -100,11 +101,11 @@ const OrganizationsPage = () => {
       setOrganizations(prevOrgs => prevOrgs.filter(o => o.id !== orgToDelete.id));
       await refreshUserOrganizations();
       // fetchOrganizations(); // Re-fetching after optimistic update + refresh might be redundant
-      alert(`Organization "${orgToDelete.name}" deleted successfully.`);
+      toast.success(`Organization "${orgToDelete.name}" deleted successfully.`);
     } catch (err: any) {
       console.error("Failed to delete organization:", err);
       setError(err.response?.data?.detail || "Failed to delete organization.");
-      alert(err.response?.data?.detail || "Failed to delete organization.");
+      toast.error(err.response?.data?.detail || "Failed to delete organization.");
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
@@ -263,7 +264,7 @@ const OrganizationsPage = () => {
                     <AlertDialogAction 
                     onClick={handleConfirmDelete}
                     disabled={isDeleting} 
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    className="bg-destructive hover:bg-destructive/90 text-white"
                     >
                     {isDeleting ? "Deleting..." : "Yes, delete organization"}
                     </AlertDialogAction>

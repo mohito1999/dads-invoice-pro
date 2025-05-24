@@ -15,7 +15,8 @@ from app.schemas.invoice import (
     InvoiceStatusEnum,
     PricePerTypeEnum, 
     InvoiceItemUpdate,
-    InvoiceTypeEnum
+    InvoiceTypeEnum,
+    PaymentRecordIn
 )
 
 # Helper function to calculate a single line item's total
@@ -541,3 +542,58 @@ async def create_packing_list_from_commercial(
       )
       print(f"--- DEBUG: Exiting create_packing_list_from_commercial. New Packing List (Invoice ID): {new_packing_list_invoice.id} ---")
       return new_packing_list_invoice
+
+
+async def record_payment_for_invoice(
+    db: AsyncSession,
+    *,
+    db_invoice: InvoiceModel, # The invoice object to update
+    payment_in: PaymentRecordIn # Using the new schema
+) -> InvoiceModel:
+    print(f"\n--- DEBUG: Entering record_payment_for_invoice for Invoice ID: {db_invoice.id} ---")
+    print(f"DEBUG: Payment details received: {payment_in}")
+    print(f"DEBUG: Current invoice amount_paid: {db_invoice.amount_paid}, total_amount: {db_invoice.total_amount}, status: {db_invoice.status}")
+
+    # Add the new payment to the existing amount_paid
+    # Ensure db_invoice.amount_paid is not None, default to 0.0 if it is
+    current_amount_paid_on_invoice = db_invoice.amount_paid if db_invoice.amount_paid is not None else 0.0
+    new_total_amount_paid = round(current_amount_paid_on_invoice + payment_in.amount_paid_now, 2)
+    
+    db_invoice.amount_paid = new_total_amount_paid
+    print(f"DEBUG: New total amount_paid for invoice: {db_invoice.amount_paid}")
+
+    # Update status based on the new total amount_paid
+    if db_invoice.amount_paid >= db_invoice.total_amount:
+        # Consider a small tolerance for floating point comparisons if necessary
+        # e.g., if abs(db_invoice.amount_paid - db_invoice.total_amount) < 0.001:
+        db_invoice.status = InvoiceStatusEnum.PAID
+        # Ensure amount_paid doesn't exceed total_amount (e.g. overpayment handling)
+        # For now, we can cap it or allow it. Let's cap for simplicity.
+        db_invoice.amount_paid = db_invoice.total_amount 
+    elif db_invoice.amount_paid > 0:
+        db_invoice.status = InvoiceStatusEnum.PARTIALLY_PAID
+    else: # amount_paid <= 0
+        # If a payment results in 0 paid, and it wasn't draft/cancelled, it becomes UNPAID.
+        # This case is less likely if payment_in.amount_paid_now must be > 0.
+        if db_invoice.status not in [InvoiceStatusEnum.DRAFT, InvoiceStatusEnum.CANCELLED]:
+            db_invoice.status = InvoiceStatusEnum.UNPAID
+    
+    print(f"DEBUG: Updated invoice status to: {db_invoice.status}, amount_paid: {db_invoice.amount_paid}")
+
+    # Here you could also create a record in a separate 'Payments' table if you had one:
+    # db_payment_log = PaymentLogModel(
+    #     invoice_id=db_invoice.id, 
+    #     amount=payment_in.amount_paid_now, 
+    #     payment_date=payment_in.payment_date,
+    #     payment_method=payment_in.payment_method,
+    #     notes=payment_in.notes
+    # )
+    # db.add(db_payment_log)
+
+    db.add(db_invoice) # Mark invoice for update
+    await db.commit()
+    await db.refresh(db_invoice) # Refresh to get any DB-side changes (like updated_at)
+    
+    print(f"--- DEBUG: Exiting record_payment_for_invoice. Invoice status: {db_invoice.status}, amount_paid: {db_invoice.amount_paid} ---")
+    return db_invoice
+
