@@ -208,43 +208,82 @@ async def download_invoice_pdf(
     current_user: models.User = Depends(deps.get_current_active_user)
 ) -> Response:
     """
-    Download a specific invoice as a PDF.
+    Download a specific invoice as a PDF, using the organization's selected
+    template or the system default template.
     """
-    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id) 
+    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     if invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    await deps.get_valid_organization_for_user(
+    # Ensure the organization (which holds the template preference) is valid for the user
+    # The get_invoice already loads the organization via joinedload in crud_invoice
+    # but this check is for authorization on the organization itself.
+    db_organization = await deps.get_valid_organization_for_user(
         db=db, org_id=invoice.organization_id, current_user=current_user
     )
 
-    if not invoice.organization: await db.refresh(invoice, attribute_names=['organization'])
+    # --- START: Determine Template Path ---
+    template_file_name_to_use: Optional[str] = None
+
+    # The invoice.organization should have selected_invoice_template eagerly loaded
+    # due to lazy="selectin" in Organization model and get_invoice in crud.invoice
+    # However, let's explicitly refresh if needed or access it safely.
+    
+    # It's good practice to ensure relationships are loaded if you depend on them.
+    # The get_invoice in crud.invoice already does joinedload(InvoiceModel.organization)
+    # which *should* bring selected_invoice_template if the relationship is set up for eager loading.
+    # If invoice.organization.selected_invoice_template is None after get_invoice, it means no template is selected.
+
+    if invoice.organization and invoice.organization.selected_invoice_template:
+        template_file_name_to_use = invoice.organization.selected_invoice_template.template_file_path
+        print(f"DEBUG: Using organization's selected template: {template_file_name_to_use}")
+    else:
+        print(f"DEBUG: Organization (ID: {invoice.organization_id}) has no specific template selected. Looking for system default.")
+        system_default_template = await crud.invoice_template.get_system_default_template(db)
+        if system_default_template:
+            template_file_name_to_use = system_default_template.template_file_path
+            print(f"DEBUG: Using system default template: {template_file_name_to_use}")
+        else:
+            # Fallback if no system default is found (should ideally not happen)
+            print(f"WARNING: No system default template found. Falling back to hardcoded 'classic_default_invoice.html'")
+            template_file_name_to_use = "classic_default_invoice.html" 
+            # Or raise an error:
+            # raise HTTPException(status_code=500, detail="Invoice template configuration error: No system default template found.")
+
+    if not template_file_name_to_use:
+        # This case should be rare if the fallback logic is robust
+        raise HTTPException(status_code=500, detail="Could not determine invoice template to use.")
+    # --- END: Determine Template Path ---
+
+    # Ensure other necessary related data is loaded for the template context
+    # (get_invoice in crud.invoice should handle most of this)
     if not invoice.customer: await db.refresh(invoice, attribute_names=['customer'])
-    # Eager loading in crud.invoice.get_invoice should handle line_items and nested item/images
+    # For line_items and their nested item.images, get_invoice in crud.invoice uses selectinload.
 
     template_context = {"invoice": invoice, "SERVER_HOST": settings.SERVER_HOST}
 
     try:
-        template = jinja_env.get_template("invoice_template.html")
+        print(f"DEBUG: Attempting to load Jinja template: {template_file_name_to_use}")
+        template = jinja_env.get_template(template_file_name_to_use) # Use dynamic template name
         html_content = template.render(template_context)
     except Exception as e:
-        print(f"Error rendering template for invoice PDF: {e}")
-        # import traceback # Keep for deeper debugging if needed later
+        print(f"Error rendering template '{template_file_name_to_use}' for invoice PDF: {e}")
+        # import traceback
         # traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Error generating invoice: Template rendering failed.")
+        raise HTTPException(status_code=500, detail=f"Error generating invoice: Template rendering failed using '{template_file_name_to_use}'.")
 
     try:
         loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as pool: 
+        with ThreadPoolExecutor() as pool:
             pdf_bytes = await loop.run_in_executor(
                 pool,
-                lambda: HTML(string=html_content, base_url=settings.SERVER_HOST).write_pdf()
+                lambda: HTML(string=html_content, base_url=str(TEMPLATE_DIR.parent)).write_pdf() # Use TEMPLATE_DIR.parent as base for relative static assets if any are in templates/
             )
     except Exception as e:
-        print(f"Error generating PDF with WeasyPrint for invoice: {e}")
-        # import traceback # Keep for deeper debugging if needed later
+        print(f"Error generating PDF with WeasyPrint for invoice using template '{template_file_name_to_use}': {e}")
+        # import traceback
         # traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating invoice: PDF conversion failed. Details: {str(e)}")
 

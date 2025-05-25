@@ -1,5 +1,20 @@
 // src/types/index.ts
 
+
+// --- Invoice Template Types ---
+export interface InvoiceTemplateSummary {
+    id: string; // UUID
+    name: string;
+    description?: string | null;
+    thumbnail_url?: string | null;
+    is_system_default: boolean;
+    order_index: number;
+}
+  
+export interface InvoiceTemplate extends InvoiceTemplateSummary {
+    template_file_path: string;
+}
+
 // --- Organization Types ---
 export interface OrganizationSummary {
     id: string;
@@ -16,6 +31,8 @@ export interface Organization extends OrganizationSummary {
     country?: string | null;
     contact_phone?: string | null;
     user_id: string;
+    selected_invoice_template_id?: string | null;
+    selected_invoice_template?: InvoiceTemplateSummary | null;
 }
 
 // MODIFIED OrganizationFormData
@@ -29,6 +46,7 @@ export interface OrganizationFormData {
   country?: string;
   contact_email?: string;
   contact_phone?: string;
+  selected_invoice_template_id?: string | null;
   // logo_url is removed, will be handled by File state in the form
 }
 

@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ invoice.invoice_type.value | replace('_', ' ') | title if invoice.invoice_type else 'Document' }} - {{ invoice.invoice_number }}</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --accent-color: #06b6d4;
+            --success-color: #10b981;
+            --text-color: #1f2937;
+            --text-light: #6b7280;
+            --text-muted: #9ca3af;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border-color: #e5e7eb;
+            --border-light: #f3f4f6;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            font-size: 10pt;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            background: var(--bg-secondary);
+        }
+
+        @page {
+            size: A4;
+            margin: 12mm;
+
+            @top-left {
+                {% set header_title = "DOCUMENT" %}
+                {% if invoice.invoice_type.value == "PRO_FORMA" %}
+                    {% set header_title = "Pro Forma Invoice" %}
+                {% elif invoice.invoice_type.value == "COMMERCIAL" %}
+                    {% set header_title = "Commercial Invoice" %}
+                {% elif invoice.invoice_type.value == "PACKING_LIST" %}
+                    {% set header_title = "Packing List" %}
+                {% endif %}
+                content: "{{ header_title }}";
+                font-family: var(--font-sans);
+                font-size: 14pt;
+                font-weight: 700;
+                color: var(--primary-color);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                color: var(--text-muted);
+                font-weight: 500;
+            }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 210mm;
+            margin: 0 auto;
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-lg);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        /* Header Section with Gradient */
+        .header-gradient {
+            background: var(--bg-accent);
+            padding: 20px 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-gradient::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><pattern id="grain" width="100" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1.5" fill="white" opacity="0.1"/><circle cx="90" cy="5" r="1" fill="white" opacity="0.08"/><circle cx="50" cy="15" r="1.2" fill="white" opacity="0.06"/></pattern></defs><rect width="100" height="20" fill="url(%23grain)"/></svg>') repeat;
+            opacity: 0.3;
+        }
+
+        .main-header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            z-index: 1;
+        }
+
+        .company-info-left {
+            flex: 1;
+            color: white;
+        }
+
+        .company-name {
+            font-size: 24pt;
+            font-weight: 800;
+            margin: 0 0 8px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            letter-spacing: -0.5px;
+        }
+
+        .company-info-left p {
+            margin: 2px 0;
+            font-size: 9pt;
+            color: rgba(255,255,255,0.9);
+            font-weight: 400;
+        }
+
+        .company-info-left .contact-detail {
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
+        .logo-area-right {
+            flex-shrink: 0;
+            margin-left: 30px;
+        }
+
+        .logo-area-right img.logo {
+            max-width: 200px;
+            max-height: 80px;
+            object-fit: contain;
+            filter: brightness(0) invert(1);
+            opacity: 0.95;
+        }
+
+        /* Invoice Details Card */
+        .invoice-details-card {
+            margin: -15px 30px 25px 30px;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .detail-item {
+            text-align: center;
+        }
+
+        .detail-label {
+            font-size: 8pt;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            font-size: 11pt;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        /* Customer Section */
+        .customer-section {
+            margin: 0 30px 25px 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .customer-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .customer-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--primary-color), var(--accent-color));
+        }
+
+        .customer-card h3 {
+            font-size: 9pt;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .customer-card p {
+            margin: 3px 0;
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+
+        .customer-card p strong {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* Items Table */
+        .table-container {
+            margin: 0 30px 25px 30px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-primary);
+        }
+
+        .items-table thead th {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 12px 10px;
+            font-size: 8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: none;
+        }
+
+        .items-table tbody tr {
+            border-bottom: 1px solid var(--border-light);
+            transition: background-color 0.15s ease;
+        }
+
+        .items-table tbody tr:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .items-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .items-table td {
+            padding: 12px 10px;
+            font-size: 9pt;
+            border: none;
+            vertical-align: top;
+        }
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+
+        .description-cell {
+            font-weight: 500;
+        }
+
+        .description-cell small {
+            font-size: 8pt;
+            color: var(--text-light);
+            font-style: italic;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .item-images-row td {
+            padding: 8px 10px;
+            background-color: var(--bg-secondary);
+        }
+
+        .item-images-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 4px;
+        }
+
+        .item-images-container img {
+            width: 45px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            border: 2px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .item-images-container img:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary-color);
+        }
+
+        /* Totals Section */
+        .totals-section {
+            margin: 0 30px 25px 30px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .totals-card {
+            width: 350px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        .totals-header {
+            background: linear-gradient(135deg, var(--text-color) 0%, var(--text-light) 100%);
+            color: white;
+            padding: 12px 20px;
+            font-weight: 700;
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .totals-body {
+            padding: 0;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border-light);
+            font-size: 9pt;
+        }
+
+        .total-row:last-child {
+            border-bottom: none;
+        }
+
+        .total-row.grand-total {
+            background: var(--bg-secondary);
+            font-weight: 700;
+            font-size: 11pt;
+            color: var(--primary-color);
+            border-top: 2px solid var(--primary-color);
+        }
+
+        .total-row.balance-due {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            color: white;
+            font-weight: 700;
+        }
+
+        .total-label {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .total-value {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .grand-total .total-label,
+        .grand-total .total-value {
+            color: var(--primary-color);
+        }
+
+        .balance-due .total-label,
+        .balance-due .total-value {
+            color: white;
+        }
+
+        /* Info Blocks */
+        .info-block {
+            margin: 0 30px 20px 30px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .info-block-header {
+            background: linear-gradient(135deg, var(--accent-color) 0%, #0891b2 100%);
+            color: white;
+            padding: 10px 18px;
+            font-weight: 700;
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-block-content {
+            padding: 18px;
+        }
+
+        .info-block-content p {
+            margin: 0;
+            font-size: 9pt;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .info-block-content strong {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* Footer */
+        .footer-section {
+            margin: 30px;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #e2e8f0 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .footer-section p {
+            margin: 0;
+            font-size: 10pt;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+            
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .items-table tbody tr:hover {
+                background-color: transparent;
+            }
+            
+            .item-images-container img:hover {
+                transform: none;
+                box-shadow: none;
+            }
+        }
+
+        /* Responsive adjustments for smaller print */
+        @media print and (max-width: 210mm) {
+            .customer-section {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .invoice-details-card {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header with Gradient Background -->
+        <div class="header-gradient">
+            <div class="main-header-section">
+                <div class="company-info-left">
+                    <h1 class="company-name">{{ invoice.organization.name }}</h1>
+                    <p>{{ invoice.organization.address_line1 or '' }}</p>
+                    {% if invoice.organization.address_line2 %}<p>{{ invoice.organization.address_line2 }}</p>{% endif %}
+                    <p>
+                        {{ invoice.organization.city or '' }}{% if invoice.organization.state_province_region %}, {{ invoice.organization.state_province_region }}{% endif %} {{ invoice.organization.zip_code or '' }}
+                    </p>
+                    <p>{{ invoice.organization.country or '' }}</p>
+                    {% if invoice.organization.contact_phone %}<p class="contact-detail"><strong>Phone:</strong> {{ invoice.organization.contact_phone }}</p>{% endif %}
+                    {% if invoice.organization.contact_email %}<p class="contact-detail"><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
+                </div>
+                {% if invoice.organization.logo_url %}
+                <div class="logo-area-right">
+                    {% if invoice.organization.logo_url.startswith('http') %}
+                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% elif SERVER_HOST %}
+                        <img src="{{ SERVER_HOST }}{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% else %}
+                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Invoice Details Card -->
+        <div class="invoice-details-card">
+            <div class="detail-item">
+                <div class="detail-label">Invoice Number</div>
+                <div class="detail-value">{{ invoice.invoice_number }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Invoice Date</div>
+                <div class="detail-value">{{ invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '-' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Due Date</div>
+                <div class="detail-value">{{ invoice.due_date.strftime('%d %b %Y') if invoice.due_date else '-' }}</div>
+            </div>
+        </div>
+
+        <!-- Customer Information -->
+        <div class="customer-section">
+            <div class="customer-card">
+                <h3>Bill To</h3>
+                <p><strong>{{ invoice.customer.company_name }}</strong></p>
+                {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
+                {% if invoice.customer.email %}<p><strong>Email:</strong> {{ invoice.customer.email }}</p>{% endif %}
+                {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>{% endif %}
+            </div>
+            <div class="customer-card">
+                <h3>Billing Address</h3>
+                <p>{{ invoice.customer.billing_address_line1 or '' }}</p>
+                {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{% endif %}
+                <p>
+                    {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}
+                </p>
+                <p>{{ invoice.customer.billing_country or '' }}</p>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="table-container">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 4%;" class="text-center">#</th>
+                        <th style="width: 40%;">Description</th>
+                        {% set unit_header_label = "UNITS" %}
+                        {% if invoice.line_items and invoice.line_items[0] and invoice.line_items[0].unit_type %}
+                            {% set unit_header_label = invoice.line_items[0].unit_type | upper %}
+                        {% endif %}
+                        <th style="width: 10%;" class="text-center">Qty ({{ unit_header_label }})</th>
+                        <th style="width: 10%;" class="text-center">Qty (CTNs)</th>
+                        <th style="width: 16%;" class="text-right">Unit Price</th>
+                        <th style="width: 20%;" class="text-right">Line Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item_line in invoice.line_items %}
+                    <tr>
+                        <td class="text-center">{{ loop.index }}</td>
+                        <td class="description-cell">
+                            {{ item_line.item_description }}
+                            {% if item_line.item_specific_comments %}<small>{{ item_line.item_specific_comments }}</small>{% endif %}
+                        </td>
+                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_units) if item_line.quantity_units is not none else '-' }}</td>
+                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_cartons) if item_line.quantity_cartons is not none else '-' }}</td>
+                        <td class="text-right">
+                            {{ "%.2f"|format(item_line.price) }} 
+                            {% if item_line.currency %}{{ item_line.currency }}{% else %}{{ invoice.currency }}{% endif %}
+                            {% if item_line.price_per_type %}
+                            <small style="display:block; color: var(--text-light);">per {{ item_line.price_per_type.value | lower }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">{{ "%.2f"|format(item_line.line_total) }} {{ invoice.currency }}</td>
+                    </tr>
+                    {% if item_line.item and item_line.item.images and item_line.item.images|length > 0 %}
+                    <tr class="item-images-row">
+                        <td colspan="6">
+                            <div class="item-images-container">
+                                {% for image in item_line.item.images %}
+                                    <img src="{{ SERVER_HOST }}{{ image.image_url }}" alt="{{ image.alt_text or (item_line.item_description + ' image ' + loop.index|string) }}">
+                                {% endfor %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-light);">No line items on this invoice.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Totals Section -->
+        <div class="totals-section">
+            <div class="totals-card">
+                <div class="totals-header">Summary</div>
+                <div class="totals-body">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal:</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency }}</span>
+                    </div>
+                    {% if invoice.tax_percentage is not none and invoice.tax_amount != 0 %}
+                    <div class="total-row">
+                        <span class="total-label">Tax {% if invoice.tax_percentage %}({{ "%.2f"|format(invoice.tax_percentage) }}%){% endif %}:</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</span>
+                    </div>
+                    {% endif %}
+                    {% if invoice.discount_percentage is not none and invoice.discount_amount != 0 %}
+                    <div class="total-row">
+                        <span class="total-label">Discount {% if invoice.discount_percentage %}({{ "%.2f"|format(invoice.discount_percentage) }}%){% endif %}:</span>
+                        <span class="total-value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="total-row grand-total">
+                        <span class="total-label">TOTAL:</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency }}</span>
+                    </div>
+                    {% if invoice.amount_paid and invoice.amount_paid > 0 %}
+                    <div class="total-row">
+                        <span class="total-label">Amount Paid:</span>
+                        <span class="total-value">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency }}</span>
+                    </div>
+                    <div class="total-row balance-due">
+                        <span class="total-label">BALANCE DUE:</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount - (invoice.amount_paid or 0)) }} {{ invoice.currency }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Shipping Information -->
+        {% if invoice.invoice_type.value == "COMMERCIAL" and (invoice.container_number or invoice.seal_number or invoice.hs_code or invoice.bl_number) %}
+        <div class="info-block">
+            <div class="info-block-header">Shipping Information</div>
+            <div class="info-block-content">
+                <p>{% if invoice.container_number %}<strong>Container #:</strong> {{ invoice.container_number }}<br>{% endif %}{% if invoice.seal_number %}<strong>Seal #:</strong> {{ invoice.seal_number }}<br>{% endif %}{% if invoice.hs_code %}<strong>H.S. Code:</strong> {{ invoice.hs_code }}<br>{% endif %}{% if invoice.bl_number %}<strong>B/L Number:</strong> {{ invoice.bl_number }}{% endif %}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Comments/Notes -->
+        {% if invoice.comments_notes %}
+        <div class="info-block">
+            <div class="info-block-header">Comments / Notes</div>
+            <div class="info-block-content">
+                <p>{{ invoice.comments_notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="footer-section">
+            <p>Thank you for your business!</p>
+        </div>
+    </div>
+</body>
+</html>
