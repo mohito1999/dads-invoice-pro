@@ -1,39 +1,55 @@
 // src/pages/ItemsPage.tsx
 import { useEffect, useState } from 'react';
 import apiClient from '@/services/apiClient';
-import { Item, ItemSummary } from '@/types';
+import { Item, ItemSummary } from '@/types'; // Item is for full item details for form
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // DialogTrigger is implicit
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ItemForm from '@/components/items/ItemForm';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, ImageOff } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, ImageIcon } from "lucide-react";
 import { useOrg } from '@/contexts/OrgContext';
 import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { getFullStaticUrl } from '@/config';
+
 const ItemsPage = () => {
   const { activeOrganization, isLoadingOrgs: isLoadingActiveOrg } = useOrg();
   const [items, setItems] = useState<ItemSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false); // For fetching items list
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [currentItem, setCurrentItem] = useState<Item | undefined>(undefined);
+  const [currentItem, setCurrentItem] = useState<Item | undefined>(undefined); 
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ItemSummary | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false); // Specific loading state for delete
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const getErrorMessage = (err: any): string => {
+    if (err.response?.data?.detail) {
+      const detail = err.response.data.detail;
+      if (Array.isArray(detail) && detail.length > 0 && typeof detail[0].msg === 'string') {
+        // Handle FastAPI validation error array
+        return detail.map((e: any) => `${e.loc.join('.')} - ${e.msg}`).join('; ');
+      } else if (typeof detail === 'string') {
+        return detail;
+      }
+    }
+    return err.message || 'An unknown error occurred.';
+  };
 
   const fetchItems = async (orgId: string, search: string = "") => {
     setIsLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ organization_id: orgId, skip: "0", limit: "1000" }); // Increased limit
+      // FIX 1: Changed limit to 100 (or any value <= 200 as per backend)
+      const params = new URLSearchParams({ organization_id: orgId, skip: "0", limit: "100" }); 
       if (search) {
         params.append("search", search);
       }
@@ -41,7 +57,8 @@ const ItemsPage = () => {
       setItems(response.data);
     } catch (err: any) {
       console.error("Failed to fetch items:", err);
-      setError(err.response?.data?.detail || 'Failed to load items.');
+      // FIX 2: Ensure error message is a string
+      setError(getErrorMessage(err));
       setItems([]);
     } finally {
       setIsLoading(false);
@@ -53,13 +70,13 @@ const ItemsPage = () => {
       fetchItems(activeOrganization.id, searchTerm);
     } else if (!isLoadingActiveOrg) {
       setItems([]);
-      setError(null); // Clear errors if no org is active
+      setError(null);
     }
   }, [activeOrganization, isLoadingActiveOrg, searchTerm]);
 
   const handleOpenCreateModal = () => {
     setFormMode('create'); 
-    setCurrentItem(undefined); 
+    setCurrentItem(undefined);
     setIsFormModalOpen(true);
   };
 
@@ -70,12 +87,14 @@ const ItemsPage = () => {
         setCurrentItem(response.data); 
         setIsFormModalOpen(true);
     } catch (err: any) { 
-        toast.error(err.response?.data?.detail || "Failed to load item details."); 
+        toast.error(getErrorMessage(err) || "Failed to load item details for editing."); 
     }
   };
 
   const handleFormSuccess = (processedItem: Item) => {
-    if (activeOrganization?.id) fetchItems(activeOrganization.id, searchTerm);
+    if (activeOrganization?.id) {
+      fetchItems(activeOrganization.id, searchTerm);
+    }
     setIsFormModalOpen(false);
     toast.success(`Item "${processedItem.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
   };
@@ -91,11 +110,12 @@ const ItemsPage = () => {
     setError(null);
     try {
         await apiClient.delete(`/items/${itemToDelete.id}`);
-        setItems(prevItems => prevItems.filter(i => i.id !== itemToDelete.id)); // Optimistic update
+        fetchItems(activeOrganization.id, searchTerm);
         toast.success(`Item "${itemToDelete.name}" deleted successfully.`);
     } catch (err:any) { 
-        setError(err.response?.data?.detail || "Failed to delete item.");
-        toast.error(err.response?.data?.detail || "Failed to delete item.");
+        const errMsg = getErrorMessage(err);
+        setError(errMsg);
+        toast.error(errMsg || "Failed to delete item.");
     }
     finally { 
         setIsDeleting(false);
@@ -131,13 +151,11 @@ const ItemsPage = () => {
     );
   }
   
-  // Initial loading state for items specific to the active organization
   if (isLoading && items.length === 0 && !searchTerm && !error) {
      return (
         <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold">Items for {activeOrganization.name}</h1>
-                {/* Search and Create button can be here but might be better to show them with the card */}
             </div>
             <Card className="w-full">
                 <CardHeader />
@@ -168,18 +186,19 @@ const ItemsPage = () => {
       </div>
 
       <Dialog open={isFormModalOpen} onOpenChange={setIsFormModalOpen}>
-        <DialogContent className="sm:max-w-[525px]">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{formMode === 'create' ? 'Create New Item' : 'Edit Item'}</DialogTitle>
-            <DialogDescription>
-              {formMode === 'create' ? `Adding item to organization: ${activeOrganization.name}.` : `Editing item: ${currentItem?.name || ''}`}
-            </DialogDescription>
+            <DialogTitle>{formMode === 'create' ? 'Create New Item' : `Edit Item: ${currentItem?.name || ''}`}</DialogTitle>
+            {formMode === 'create' &&
+                <DialogDescription>
+                    Adding a new item to organization: {activeOrganization.name}.
+                </DialogDescription>
+            }
           </DialogHeader>
           {isFormModalOpen && (formMode === 'create' || (formMode === 'edit' && currentItem)) && (
             <ItemForm 
                 mode={formMode} 
-                initialData={currentItem} 
-                organizationId={activeOrganization.id} // Pass active org ID
+                initialData={formMode === 'edit' ? currentItem : undefined}
                 onSuccess={handleFormSuccess} 
                 onCancel={() => setIsFormModalOpen(false)} 
             />
@@ -189,14 +208,12 @@ const ItemsPage = () => {
 
       <Card className="w-full">
         <CardHeader>
-            {/* Optional CardTitle if needed, page title might be sufficient */}
-            {/* <CardTitle>Product/Service Catalog</CardTitle> */}
-             {error && items.length > 0 && ( // Show error as a notice if data is already present
+             {error && items.length > 0 && (
                 <p className="text-sm text-destructive py-2 px-1 text-center">{error}</p>
             )}
         </CardHeader>
         <CardContent className={(items.length === 0 || error) && !isLoading ? "pt-6" : ""}>
-            {error && items.length === 0 && ( // Prominent error if list is empty due to error
+            {error && items.length === 0 && (
                  <div className="text-center py-10 text-destructive">{error}</div>
             )}
             {!isLoading && items.length === 0 && !error ? (
@@ -212,12 +229,12 @@ const ItemsPage = () => {
                     </Button>
                 </div>
             ) : (
-                !error && items.length > 0 && ( // Only show table if no error and items exist
+                !error && items.length > 0 && (
                     <div className="rounded-md border">
                         <Table>
                         <TableHeader>
                             <TableRow>
-                            <TableHead className="w-[60px] sm:w-[80px]">Image</TableHead>
+                            <TableHead className="w-[60px]">Image</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="hidden sm:table-cell">Description</TableHead>
                             <TableHead className="hidden md:table-cell">Default Price</TableHead>
@@ -229,11 +246,15 @@ const ItemsPage = () => {
                             {items.map((item) => (
                             <TableRow key={item.id}>
                                 <TableCell>
-                                {item.image_url ? (
-                                    <img src={item.image_url} alt={item.name} className="h-10 w-10 sm:h-12 sm:w-12 object-cover rounded-md" />
+                                {item.primary_image_url ? ( 
+                                    <img 
+                                      src={getFullStaticUrl(item.primary_image_url)}
+                                      alt={item.name} 
+                                      className="h-10 w-10 object-contain rounded-sm"
+                                    />
                                 ) : (
-                                    <div className="h-10 w-10 sm:h-12 sm:w-12 bg-muted rounded-md flex items-center justify-center text-muted-foreground">
-                                    <ImageOff className="h-5 w-5 sm:h-6 sm:w-6" />
+                                    <div className="h-10 w-10 bg-muted rounded-sm flex items-center justify-center text-muted-foreground">
+                                      <ImageIcon className="h-5 w-5" />
                                     </div>
                                 )}
                                 </TableCell>
@@ -262,7 +283,7 @@ const ItemsPage = () => {
                     </div>
                 )
             )}
-            {isLoading && (items.length > 0 || searchTerm) && ( // Loading indicator for refreshes or search loading
+            {isLoading && (items.length > 0 || searchTerm) && (
                 <div className="text-center py-4 text-sm text-muted-foreground">Loading items...</div>
             )}
         </CardContent>

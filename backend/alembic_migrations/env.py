@@ -25,6 +25,9 @@ from app.models import user
 from app.models import customer
 from app.models import item
 from app.models import invoice
+from app.models import item_image # Make sure this was there for previous migrations
+from app.models import invoice_template # <-- CRITICAL: Ensure this is imported
+
 # Add other model imports as you create them, e.g.:
 # from app.models.user import User # Example: from app.models.user import User
 # from app.models.item import Item
@@ -113,6 +116,21 @@ async def run_migrations_online() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
+print("--- DEBUG: Alembic env.py ---")
+print(f"PROJECT_ROOT: {PROJECT_ROOT}")
+print("sys.path:")
+for p in sys.path:
+    print(f"  - {p}")
+print("Tables known to Base.metadata:")
+for table_name, table_obj in Base.metadata.tables.items():
+    print(f"  - Table: {table_name}")
+    for col in table_obj.columns:
+        print(f"    - Column: {col.name} (Type: {col.type})")
+    for fk in table_obj.foreign_keys:
+        print(f"    - Foreign Key: {fk.column.table.name}.{fk.column.name} (Refers to: {fk.target_fullname})")
+print("--- END DEBUG ---")
+
 
 # Main Alembic entry point
 if context.is_offline_mode():

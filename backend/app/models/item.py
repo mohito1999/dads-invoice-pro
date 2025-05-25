@@ -17,13 +17,21 @@ class Item(Base):
     # For handling multiple images, a JSONB column is flexible.
     # Or a separate ItemImage table for a more structured approach.
     # Let's use a single image_url text field for now for simplicity, matching the schema.
-    image_url = Column(String(1024), nullable=True) # URL to a primary image
+    
 
     # Foreign Key to Organization
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
     
     # Relationship to Organization: An item belongs to one organization
     organization = relationship("Organization", back_populates="items")
+
+    images = relationship(
+              "ItemImage", # String reference to avoid circular import issues at module load time
+              back_populates="item",
+              cascade="all, delete-orphan", # If item is deleted, its images are deleted
+              lazy="selectin",
+              order_by="ItemImage.order_index"  # Eagerly load images when an item is fetched
+    )
     
 
     # Relationship to InvoiceItems: An item can be part of many invoice line items

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, HttpUrl, EmailStr, constr
 from typing import Optional
 import uuid # For UUIDs as primary keys
+from app.schemas.invoice_template import InvoiceTemplateSummary
 
 # Shared properties
 class OrganizationBase(BaseModel):
@@ -13,7 +14,8 @@ class OrganizationBase(BaseModel):
     country: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
-    logo_url: Optional[HttpUrl] = None
+    logo_url: Optional[str] = None
+    selected_invoice_template_id: Optional[uuid.UUID] = None
 
 # Properties to receive on organization creation
 class OrganizationCreate(OrganizationBase):
@@ -34,12 +36,14 @@ class OrganizationUpdate(OrganizationBase):
     country: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
-    logo_url: Optional[HttpUrl] = None
+    logo_url: Optional[str] = None
+    selected_invoice_template_id: Optional[uuid.UUID] = None
 
 
 # Properties stored in DB (not directly exposed, but useful for internal representation)
 class OrganizationInDBBase(OrganizationBase):
     id: uuid.UUID # Primary Key
+    user_id: uuid.UUID
     # user_id: uuid.UUID # Foreign Key to User (will add later)
     # created_at: datetime # Will add later with a base model
     # updated_at: datetime # Will add later with a base model
@@ -49,13 +53,13 @@ class OrganizationInDBBase(OrganizationBase):
 
 # Properties to return to client
 class Organization(OrganizationInDBBase):
-    pass # Inherits all fields from OrganizationInDBBase
+    selected_invoice_template: Optional[InvoiceTemplateSummary] = None # Inherits all fields from OrganizationInDBBase
 
 # Properties to return in a list
 class OrganizationSummary(BaseModel):
     id: uuid.UUID
     name: str
-    logo_url: Optional[HttpUrl] = None
+    logo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

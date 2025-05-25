@@ -43,7 +43,19 @@ class Organization(Base):
         cascade="all, delete-orphan" # If an org is deleted, its items are also deleted
     )
 
+    # --- NEW: Link to InvoiceTemplate ---
+    selected_invoice_template_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("invoicetemplates.id"), # <<< CORRECTED: matches 'InvoiceTemplate'.lower() + 's'
+        nullable=True
+    )
 
+    selected_invoice_template = relationship(
+        "InvoiceTemplate", # String reference to avoid circular import if InvoiceTemplate model also refers to Organization
+        backref="organizations_using_this_template", # Optional: allows InvoiceTemplate to see which orgs use it
+        lazy="selectin" # Eagerly load the selected template details when an org is fetched
+    )
+    # --- END NEW ---
 
     def __repr__(self):
         return f"<Organization(id={self.id}, name='{self.name}')>"

@@ -610,7 +610,7 @@ const InvoiceEditorPage = () => {
                             <Label htmlFor="hs_code">H.S. Code</Label>
                             <Input id="hs_code" value={hsCode} onChange={e => setHSCode(e.target.value)} className="mt-1" disabled={isLoading}/>
                         </div>
-                        {invoiceType === InvoiceTypeEnum.PACKING_LIST && (
+                        {(invoiceType === InvoiceTypeEnum.PACKING_LIST || invoiceType === InvoiceTypeEnum.COMMERCIAL) && (
                             <div>
                                 <Label htmlFor="bl_number">B/L Number</Label>
                                 <Input 

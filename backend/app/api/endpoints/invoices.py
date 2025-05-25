@@ -1,20 +1,24 @@
+# backend/app/api/endpoints/invoices.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
+import asyncio 
+from concurrent.futures import ThreadPoolExecutor 
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Any, Optional
 import uuid
 from datetime import date
+from app.core.config import settings 
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape # For Jinja2
-from weasyprint import HTML # For WeasyPrint
-from pathlib import Path # For path manipulation
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from weasyprint import HTML # type: ignore
+from pathlib import Path
 
 from app import crud, models, schemas
 from app.db.session import get_db
-from app.api import deps # For get_current_active_user and get_valid_organization_for_user
+from app.api import deps
 
 router = APIRouter()
 
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates" # backend/app/templates
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 jinja_env = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
     autoescape=select_autoescape(['html', 'xml'])
@@ -25,19 +29,16 @@ jinja_env = Environment(
 async def create_new_invoice(
     *,
     db: AsyncSession = Depends(get_db),
-    invoice_in: schemas.InvoiceCreate, # Contains organization_id, customer_id, line_items
+    invoice_in: schemas.InvoiceCreate,
     current_user: models.User = Depends(deps.get_current_active_user)
 ) -> Any:
     """
     Create a new invoice with its line items.
-    The invoice is associated with the current authenticated user.
     """
-    # 1. Authorize that the current user owns the target organization
     organization = await deps.get_valid_organization_for_user(
         db=db, org_id=invoice_in.organization_id, current_user=current_user
     )
 
-    # 2. Validate the customer belongs to this organization
     customer = await crud.customer.get_customer(db, customer_id=invoice_in.customer_id)
     if not customer or customer.organization_id != organization.id:
         raise HTTPException(
@@ -45,7 +46,6 @@ async def create_new_invoice(
             detail="Customer not found or does not belong to the specified organization."
         )
     
-    # 3. Optional: Validate items if item_id is provided in line_items
     for line_item_in in invoice_in.line_items:
         if line_item_in.item_id:
             item = await crud.item.get_item(db, item_id=line_item_in.item_id)
@@ -76,11 +76,11 @@ async def read_invoices_for_user(
 ) -> Any:
     """
     Retrieve invoices for the current authenticated user, with optional filters.
-    If organization_id is provided, authorization for that org is checked.
     """
     if organization_id:
-        # Ensure user has access to this organization if specified for filtering
-        await deps.get_valid_organization_for_user(db=db, org_id=organization_id, current_user=current_user)
+        await deps.get_valid_organization_for_user(
+            db=db, org_id=organization_id, current_user=current_user
+        )
 
     invoices = await crud.invoice.get_invoices_by_user(
         db,
@@ -95,10 +95,8 @@ async def read_invoices_for_user(
         limit=limit
     )
     
-    # Prepare summary response, including customer company name
     summaries = []
     for inv in invoices:
-        # inv.customer should be loaded by joinedload in crud.get_invoices_by_user
         customer_name = inv.customer.company_name if inv.customer else None
         summaries.append(
             schemas.InvoiceSummary(
@@ -125,7 +123,7 @@ async def read_invoice_by_id(
     """
     Get a specific invoice by ID. Ensures the invoice belongs to the current user.
     """
-    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id) # get_invoice eager loads items
+    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     if invoice.user_id != current_user.id:
@@ -138,20 +136,22 @@ async def update_existing_invoice(
     invoice_id: uuid.UUID,
     *,
     db: AsyncSession = Depends(get_db),
-    invoice_in: schemas.InvoiceUpdate, # Now includes optional line_items
+    invoice_in: schemas.InvoiceUpdate,
     current_user: models.User = Depends(deps.get_current_active_user)
 ) -> Any:
     """
     Update an invoice. Ensures the invoice belongs to the current user.
-    If 'line_items' are provided in the payload, they replace existing ones.
     """
-    db_invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id) # Eager loads current items
+    db_invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     if not db_invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     if db_invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    # If customer_id is being changed, validate the new customer
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=db_invoice.organization_id, current_user=current_user
+    )
+
     if invoice_in.customer_id and invoice_in.customer_id != db_invoice.customer_id:
         new_customer = await crud.customer.get_customer(db, customer_id=invoice_in.customer_id)
         if not new_customer or new_customer.organization_id != db_invoice.organization_id:
@@ -160,8 +160,7 @@ async def update_existing_invoice(
                 detail="New customer not found or does not belong to the invoice's organization."
             )
     
-    # If new line items are provided, validate their item_ids (if any)
-    if invoice_in.line_items is not None: # Check for explicit list, even if empty
+    if invoice_in.line_items is not None:
         for line_item_in_payload in invoice_in.line_items:
             if line_item_in_payload.item_id:
                 item = await crud.item.get_item(db, item_id=line_item_in_payload.item_id)
@@ -194,10 +193,14 @@ async def delete_existing_invoice(
     if db_invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=db_invoice.organization_id, current_user=current_user
+    )
+
     deleted_invoice_data = await crud.invoice.delete_invoice(db=db, db_invoice=db_invoice)
     return deleted_invoice_data
 
-@router.get("/{invoice_id}/pdf", response_class=Response) # Use plain Response for custom media type
+@router.get("/{invoice_id}/pdf", response_class=Response)
 async def download_invoice_pdf(
     invoice_id: uuid.UUID,
     *,
@@ -206,47 +209,50 @@ async def download_invoice_pdf(
 ) -> Response:
     """
     Download a specific invoice as a PDF.
-    Ensures the invoice belongs to the current user.
     """
-    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id) # get_invoice eager loads items, customer, org
+    invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id) 
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
-    if invoice.user_id != current_user.id: # Authorization check
+    if invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    # Ensure organization is loaded if not already by get_invoice (it should be via relationships)
-    # If invoice.organization is not loaded, you might need to explicitly load it or ensure your
-    # get_invoice function loads it via joinedload or selectinload.
-    # For this template, we assume invoice.organization and invoice.customer are loaded.
-    if not invoice.organization:
-         await db.refresh(invoice, attribute_names=['organization'])
-    if not invoice.customer:
-         await db.refresh(invoice, attribute_names=['customer'])
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=invoice.organization_id, current_user=current_user
+    )
 
+    if not invoice.organization: await db.refresh(invoice, attribute_names=['organization'])
+    if not invoice.customer: await db.refresh(invoice, attribute_names=['customer'])
+    # Eager loading in crud.invoice.get_invoice should handle line_items and nested item/images
 
-    # Render the HTML template with invoice data
+    template_context = {"invoice": invoice, "SERVER_HOST": settings.SERVER_HOST}
+
     try:
         template = jinja_env.get_template("invoice_template.html")
-        html_content = template.render(invoice=invoice)
+        html_content = template.render(template_context)
     except Exception as e:
-        print(f"Error rendering template: {e}") # Log this
+        print(f"Error rendering template for invoice PDF: {e}")
+        # import traceback # Keep for deeper debugging if needed later
+        # traceback.print_exc()
         raise HTTPException(status_code=500, detail="Error generating invoice: Template rendering failed.")
 
-    # Generate PDF using WeasyPrint
     try:
-        pdf_bytes = HTML(string=html_content).write_pdf()
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool: 
+            pdf_bytes = await loop.run_in_executor(
+                pool,
+                lambda: HTML(string=html_content, base_url=settings.SERVER_HOST).write_pdf()
+            )
     except Exception as e:
-        # WeasyPrint can raise various errors, e.g., if CSS is bad or dependencies missing
-        print(f"Error generating PDF with WeasyPrint: {e}") # Log this
+        print(f"Error generating PDF with WeasyPrint for invoice: {e}")
+        # import traceback # Keep for deeper debugging if needed later
+        # traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating invoice: PDF conversion failed. Details: {str(e)}")
 
-    # Return PDF as a response
-    filename = f"Invoice-{invoice.invoice_number.replace('/', '-')}.pdf" # Sanitize filename
+    filename = f"Invoice-{invoice.invoice_number.replace('/', '-')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
-        # Use "inline" instead of "attachment" if you want browser to display it directly
     )
 
 @router.post("/{invoice_id}/transform-to-commercial", response_model=schemas.Invoice)
@@ -255,18 +261,21 @@ async def transform_invoice_to_commercial(
     *,
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
-    # Optionally allow providing a new invoice number for the commercial version
     new_invoice_number: Optional[str] = Query(None, description="Optional new invoice number for the commercial invoice.")
 ) -> Any:
     """
     Transforms a Pro Forma invoice into a new Commercial invoice.
-    The original Pro Forma invoice remains unchanged.
     """
     pro_forma_invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     if not pro_forma_invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pro Forma Invoice not found")
     if pro_forma_invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions for this invoice")
+    
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=pro_forma_invoice.organization_id, current_user=current_user
+    )
+    
     if pro_forma_invoice.invoice_type != schemas.InvoiceTypeEnum.PRO_FORMA:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -279,7 +288,7 @@ async def transform_invoice_to_commercial(
             pro_forma_invoice=pro_forma_invoice,
             new_invoice_number=new_invoice_number
         )
-    except ValueError as e: # Catch specific errors from CRUD if any
+    except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         
     return commercial_invoice
@@ -294,14 +303,18 @@ async def generate_packing_list_from_invoice(
     new_packing_list_number: Optional[str] = Query(None, description="Optional new number for the Packing List.")
 ) -> Any:
     """
-    Generates a new Packing List (as an Invoice of type PACKING_LIST)
-    from an existing Commercial Invoice.
+    Generates a new Packing List from an existing Commercial Invoice.
     """
     commercial_invoice = await crud.invoice.get_invoice(db, invoice_id=commercial_invoice_id)
     if not commercial_invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commercial Invoice not found")
     if commercial_invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions for this invoice")
+
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=commercial_invoice.organization_id, current_user=current_user
+    )
+
     if commercial_invoice.invoice_type != schemas.InvoiceTypeEnum.COMMERCIAL:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -321,16 +334,13 @@ async def generate_packing_list_from_invoice(
 
 @router.get("/{invoice_id}/packing-list-pdf", response_class=Response)
 async def download_packing_list_pdf(
-    invoice_id: uuid.UUID, # This ID should be for an invoice of type PACKING_LIST or COMMERCIAL
+    invoice_id: uuid.UUID,
     *,
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(deps.get_current_active_user)
 ) -> Response:
     """
     Download a Packing List PDF.
-    The invoice_id provided should be for an invoice that is either
-    a Commercial Invoice or an already generated Packing List (type PACKING_LIST).
-    The template will display packing list specific information.
     """
     packing_list_data_source = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     
@@ -339,29 +349,30 @@ async def download_packing_list_pdf(
     if packing_list_data_source.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
-    # While the source can be Commercial, the PDF should always look like a Packing List
-    # The template itself handles showing/hiding fields.
-    # We could also enforce that only type PACKING_LIST can use this specific endpoint.
-    # if packing_list_data_source.invoice_type != schemas.InvoiceTypeEnum.PACKING_LIST:
-    #     raise HTTPException(status_code=400, detail="This endpoint is only for generated Packing Lists.")
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=packing_list_data_source.organization_id, current_user=current_user
+    )
 
-
-    # Ensure related data for the template is loaded
     if not packing_list_data_source.organization: await db.refresh(packing_list_data_source, ['organization'])
     if not packing_list_data_source.customer: await db.refresh(packing_list_data_source, ['customer'])
-    if not packing_list_data_source.line_items or not all(hasattr(li, 'item') for li in packing_list_data_source.line_items if li.item_id):
-        await db.refresh(packing_list_data_source, ['line_items.item'])
+    # Eager loading in crud.invoice.get_invoice should handle line_items and nested item/images
 
-
+    template_context = {"invoice": packing_list_data_source, "SERVER_HOST": settings.SERVER_HOST}
+    
     try:
         template = jinja_env.get_template("packing_list_template.html")
-        html_content = template.render(invoice=packing_list_data_source) # Pass invoice data to template
+        html_content = template.render(template_context)
     except Exception as e:
         print(f"Error rendering packing list template: {e}")
         raise HTTPException(status_code=500, detail="Error generating packing list: Template rendering failed.")
 
     try:
-        pdf_bytes = HTML(string=html_content).write_pdf()
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            pdf_bytes = await loop.run_in_executor(
+                pool,
+                lambda: HTML(string=html_content, base_url=settings.SERVER_HOST).write_pdf()
+            )
     except Exception as e:
         print(f"Error generating packing list PDF with WeasyPrint: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating packing list: PDF conversion failed.")
@@ -378,18 +389,21 @@ async def record_invoice_payment(
     invoice_id: uuid.UUID,
     *,
     db: AsyncSession = Depends(get_db),
-    payment_details: schemas.PaymentRecordIn, # Request body
+    payment_details: schemas.PaymentRecordIn,
     current_user: models.User = Depends(deps.get_current_active_user)
 ) -> Any:
     """
     Record a payment made against a specific invoice.
-    Updates the invoice's amount_paid and status accordingly.
     """
     db_invoice = await crud.invoice.get_invoice(db, invoice_id=invoice_id)
     if not db_invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     if db_invoice.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions for this invoice")
+
+    await deps.get_valid_organization_for_user(
+        db=db, org_id=db_invoice.organization_id, current_user=current_user
+    )
 
     if db_invoice.status == schemas.InvoiceStatusEnum.PAID:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is already fully paid.")

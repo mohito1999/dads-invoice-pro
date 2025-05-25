@@ -1,53 +1,55 @@
-from pydantic import BaseModel, HttpUrl, constr, Field
+# backend/app/schemas/item.py
+from pydantic import BaseModel, HttpUrl, constr, Field # HttpUrl might not be needed if storing relative paths
 from typing import Optional, List
 import uuid
 
-# Shared properties for an item
+class ItemImageBase(BaseModel):
+    image_url: str # Relative path like /static/uploads/item_images/item_id/filename.jpg
+    order_index: Optional[int] = 0
+    alt_text: Optional[str] = None
+
+class ItemImageCreate(ItemImageBase): # For internal use or specific endpoint
+    item_id: uuid.UUID
+
+class ItemImage(ItemImageBase): # Response schema for an image
+    id: uuid.UUID
+    alt_text: Optional[str] = None
+    class Config:
+        from_attributes = True
+
 class ItemBase(BaseModel):
     name: constr(min_length=1, max_length=255)
     description: Optional[str] = None
-    default_price: Optional[float] = Field(default=None, gt=0) # Price must be greater than 0 if set
-    default_unit: Optional[str] = None # e.g., "piece", "carton", "kg", "set"
-    # default_currency: Optional[str] = None # We'll handle currency at the invoice_item level for more flexibility
+    default_price: Optional[float] = Field(default=None, ge=0) # Allow 0 for items like packing materials
+    default_unit: Optional[str] = None
+    # image_url was removed from here
 
-# Properties to receive on item creation
 class ItemCreate(ItemBase):
-    organization_id: uuid.UUID # Item must belong to an organization
-    # image_urls: Optional[List[HttpUrl]] = [] # For multiple image URLs
+    organization_id: uuid.UUID
+    # Images are uploaded via a separate endpoint after item creation or during item update
 
-# Properties to receive on item update
-class ItemUpdate(BaseModel): # All fields optional for update
+class ItemUpdate(BaseModel):
     name: Optional[constr(min_length=1, max_length=255)] = None
     description: Optional[str] = None
-    default_price: Optional[float] = Field(default=None, gt=0, allow_none=True) # Allow explicitly setting to None
+    default_price: Optional[float] = Field(default=None, ge=0, allow_none=True)
     default_unit: Optional[str] = None
-    image_url: Optional[HttpUrl] = None
+    # Images are managed via separate endpoints
 
-# Properties stored in DB
-class ItemInDBBase(ItemBase):
+class Item(ItemBase): # Full Item response schema
     id: uuid.UUID
     organization_id: uuid.UUID
-    # We will handle images separately, perhaps as a list of URLs or a related table
-    # For simplicity now, let's assume a primary image URL on the item itself,
-    # and we can expand later if multiple images per item are stored directly.
-    # Or, we can have a separate Image model linked to Item.
-    # Let's start with a single image_url for now.
-    image_url: Optional[HttpUrl] = None # Placeholder for a primary image
+    images: List[ItemImage] = [] # List of associated images
 
     class Config:
         from_attributes = True
 
-# Properties to return to client
-class Item(ItemInDBBase):
-    pass
-
-# Summary for lists/dropdowns
-class ItemSummary(BaseModel):
+class ItemSummary(BaseModel): # For lists
     id: uuid.UUID
     name: str
+    description: Optional[str] = None 
     default_price: Optional[float] = None
     default_unit: Optional[str] = None
-    image_url: Optional[HttpUrl] = None
+    primary_image_url: Optional[str] = None # Will be the URL of the first image (e.g., lowest order_index)
 
     class Config:
         from_attributes = True

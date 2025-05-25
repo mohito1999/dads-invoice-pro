@@ -1,13 +1,9 @@
-# Import all your SQLAlchemy models here to make them known to Base
-# For example:
-# from .user import User
-from .organization import Organization
+# backend/app/models/__init__.py
 from .user import User
-from .customer import Customer
+from .invoice_template import InvoiceTemplate # Should be defined before Organization
 from .item import Item
+
+from .organization import Organization # References User and InvoiceTemplate
+from .customer import Customer
+from .item_image import ItemImage
 from .invoice import Invoice, InvoiceItem
-# from .customer import Customer
-# from .item import Item
-# from .invoice import Invoice
-# from .invoice_item import InvoiceItem
-# from .payment import Payment

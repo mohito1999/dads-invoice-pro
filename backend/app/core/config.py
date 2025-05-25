@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Dad's Invoice Pro API"
     PROJECT_VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
+    SERVER_HOST: str = "http://localhost:8000"
 
     # Database
     POSTGRES_SERVER: Optional[str] = "localhost"

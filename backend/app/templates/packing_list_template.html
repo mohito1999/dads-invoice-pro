@@ -2,103 +2,175 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Packing List {{ invoice.invoice_number }}</title>
+    <title>Packing List - {{ invoice.invoice_number }}</title>
     <style>
         :root {
-            --primary-color: #002235; 
+            --primary-color: #002235;
             --text-color: #333333;
             --text-light-color: #555555;
             --border-color: #dddddd;
-            --table-header-bg: #f0f4f8; 
-            --table-row-alt-bg: #f9f9f9;
+            --section-bg-light: #f9f9f9; 
+            --body-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: var(--body-font-family);
             font-size: 10pt;
             color: var(--text-color);
             margin: 0;
             padding: 0;
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
         @page {
             size: A4;
-            margin: 20mm 15mm;
+            margin: 15mm;
 
-            @top-center {
-                content: "PACKING LIST"; 
-                font-weight: bold;
-                font-size: 16px;
+            @top-left {
+                content: "Packing List"; 
+                font-family: var(--body-font-family);
+                font-size: 16pt; 
+                font-weight: bold; 
                 color: var(--primary-color);
-                padding-bottom: 8mm;
-                border-bottom: 1px solid var(--border-color);
-                width: 100%;
+                padding-top: 0mm;
+                line-height: 1;
             }
+
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
                 font-size: 9pt;
                 color: #777;
-                vertical-align: top;
-                padding-top: 5mm;
+                vertical-align: bottom; 
+                padding-bottom: 3mm; 
             }
         }
 
-        .container { width: 100%; }
-        .header-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-bottom: 15px; margin-top: 10mm; }
-        .header-section .logo { max-width: 180px; max-height: 80px; object-fit: contain; }
-        .header-section .company-address { text-align: left; max-width: 50%; }
-        .header-section .company-address h1 { font-size: 20pt; font-weight: bold; color: var(--primary-color); margin: 0 0 5px 0; }
-        .header-section .company-address p { margin: 2px 0; font-size: 9pt; color: var(--text-light-color); }
+        .container { width: 100%; padding: 0; }
         
-        .invoice-meta-section { text-align: right; max-width: 45%; }
-        .invoice-meta-section h2 { font-size: 18pt; font-weight: bold; color: var(--text-color); margin: 0 0 10px 0; text-transform: uppercase; }
-        .invoice-meta-section p { margin: 3px 0; font-size: 10pt; }
-        .invoice-meta-section p strong { display: inline-block; min-width: 150px; font-weight: 600; }
+        .main-header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-top: 0mm; 
+            margin-bottom: 8mm;
+            padding-bottom: 8mm;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .company-info-left {
+            flex-basis: 60%; 
+            max-width: 60%;
+            padding-right: 10mm;
+        }
+        .company-info-left .company-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 0 0 5px 0;
+        }
+        .company-info-left p {
+            margin: 1px 0;
+            font-size: 9pt;
+            color: var(--text-light-color);
+            line-height: 1.4;
+        }
+        .company-info-left p.contact-detail {
+            margin-top: 3px;
+        }
+        .company-info-left p strong { font-weight: 600; color: var(--text-color); }
+
+
+        .logo-area-right {
+            flex-basis: 35%; 
+            max-width: 35%;
+            text-align: right;
+        }
+        .logo-area-right img.logo {
+            max-width: 260px; 
+            max-height: 120px; 
+            object-fit: contain;
+        }
+
+        .document-details-bar { 
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            margin-bottom: 8mm;
+            font-size: 10pt;
+        }
+        .document-details-bar .document-number { flex-basis: 40%; text-align: left; }
+        .document-details-bar .document-date { flex-basis: 30%; text-align: center; }
+        .document-details-bar .document-ref { flex-basis: 30%; text-align: right; }
+        .document-details-bar strong { font-weight: 600; }
         
-        .customer-info-section { margin-bottom: 25px; padding: 15px; background-color: var(--table-row-alt-bg); border: 1px solid var(--border-color); border-radius: 4px; }
-        .customer-info-section h3 { margin: 0 0 8px 0; font-size: 11pt; font-weight: bold; color: var(--primary-color); }
-        .customer-info-section p { margin: 2px 0; font-size: 9.5pt; }
-        .customer-info-section strong { font-weight: 600; }
-        
-        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .items-table th, .items-table td { border: 1px solid var(--border-color); padding: 8px; text-align: left; font-size: 9pt; vertical-align: top; }
-        .items-table th { background-color: var(--table-header-bg); color: var(--primary-color); font-weight: bold; text-transform: uppercase; }
-        .items-table tbody tr:nth-child(even) { background-color: var(--table-row-alt-bg); }
+        .customer-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8mm;
+            padding: 10px;
+            background-color: var(--section-bg-light);
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            page-break-inside: avoid;
+        }
+        .customer-section div { flex: 1; font-size: 9.5pt; }
+        .customer-section div.address-details { padding-left: 15px; } 
+        .customer-section h3 { font-size: 10pt; font-weight: bold; color: var(--primary-color); margin: 0 0 5px 0; text-transform: uppercase; }
+        .customer-section p { margin: 1px 0; line-height: 1.4; }
+        .customer-section p strong { font-weight: 600; }
+
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8mm; }
+        .items-table tr { page-break-inside: avoid; }
+        .items-table th, .items-table td { border: 1px solid var(--border-color); padding: 7px; text-align: left; font-size: 9pt; vertical-align: top; }
+        .items-table th { background-color: #f0f4f8; color: var(--primary-color); font-weight: bold; text-transform: uppercase; }
         .items-table .text-right { text-align: right; }
         .items-table .text-center { text-align: center; }
         .items-table .description-cell small { font-size: 8pt; color: var(--text-light-color); display: block; margin-top: 2px;}
         
-        .items-table th.item-image-col, 
-        .items-table td.item-image-col { width: 50px; text-align: center; vertical-align: middle; padding: 5px; }
-        .items-table td.item-image-col img { max-width: 40px; max-height: 40px; object-fit: contain; display: block; margin: auto; }
+        .item-images-row { page-break-inside: avoid; }
+        .item-images-row td { padding: 6px; border-top: none !important; background-color: #fdfdfd; }
+        .item-images-container { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+        .item-images-container img { max-width: 50px; max-height: 50px; object-fit: contain; border: 1px solid #eee; border-radius: 3px; }
         
         .info-block-section { 
-            margin-top: 15px; 
-            margin-bottom: 15px; 
-            padding:12px; 
-            border: 1px solid var(--border-color); 
-            border-radius: 4px;
-            background-color: var(--table-row-alt-bg);
+            margin-bottom: 6mm; 
+            padding:10px; 
+            border: 1px solid #e0e0e0; 
+            border-radius: 3px; 
+            background-color: var(--section-bg-light);
+            page-break-inside: avoid;
         }
-        .info-block-section h3 { margin:0 0 8px 0; font-size: 10pt; font-weight: bold; color: var(--primary-color); }
-        .info-block-section table { width: 100%; font-size: 9pt; border-collapse: collapse; }
-        .info-block-section table td { padding: 4px 0; border: none; vertical-align: top; }
-        .info-block-section table td:first-child { width: 30%; font-weight: 500; color: var(--text-light-color); padding-right: 10px; }
-        .info-block-section .notes-content { white-space: pre-wrap; line-height: 1.5; font-size: 9pt; }
+        .info-block-section h3 { 
+            margin:0 0 6px 0; 
+            font-size: 10pt; 
+            font-weight: bold; 
+            color: var(--primary-color); 
+        }
+        .info-block-section p.block-text-content { 
+            white-space: pre-wrap; 
+            line-height: 1.5; 
+            font-size: 9pt; 
+            margin: 0; 
+            padding: 0;
+        }
+        .info-block-section p.block-text-content strong {
+            display: inline;
+            font-weight: 600;
+            color: var(--text-color);
+        }
         
-        .footer-section { margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border-color); text-align: center; font-size: 8.5pt; color: #777; }
+        .footer-section { margin-top: 8mm; padding-top: 5mm; border-top: 0.5px solid var(--border-color); text-align: center; font-size: 8.5pt; color: #777; }
         .footer-section p { margin: 2px 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header-section">
-            <div class="company-address">
-                {% if invoice.organization.logo_url %}
-                    <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+        <div class="main-header-section">
+            <div class="company-info-left">
+                {% if not invoice.organization.logo_url %}
+                    <h1 class="company-name">{{ invoice.organization.name }}</h1>
                 {% else %}
-                    <h1>{{ invoice.organization.name }}</h1>
+                     <h2 class="company-name" style="font-size: 16pt; margin-bottom:3px;">{{ invoice.organization.name }}</h2>
                 {% endif %}
                 <p>{{ invoice.organization.address_line1 or '' }}</p>
                 {% if invoice.organization.address_line2 %}<p>{{ invoice.organization.address_line2 }}</p>{% endif %}
@@ -106,125 +178,114 @@
                     {{ invoice.organization.city or '' }}{% if invoice.organization.state_province_region %}, {{ invoice.organization.state_province_region }}{% endif %} {{ invoice.organization.zip_code or '' }}
                 </p>
                 <p>{{ invoice.organization.country or '' }}</p>
-                {% if invoice.organization.contact_phone %}<p><strong>Phone:</strong> {{ invoice.organization.contact_phone }}</p>{% endif %}
-                {% if invoice.organization.contact_email %}<p><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
+                {% if invoice.organization.contact_phone %}<p class="contact-detail"><strong>Phone:</strong> {{ invoice.organization.contact_phone }}</p>{% endif %}
+                {% if invoice.organization.contact_email %}<p class="contact-detail"><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
             </div>
-            <div class="invoice-meta-section">
-                <h2>Packing List</h2> 
-                <p><strong>Reference Invoice No:</strong> {{ invoice.invoice_number }}</p> 
-                <p><strong>Date:</strong> {{ invoice.invoice_date.strftime('%B %d, %Y') if invoice.invoice_date else '' }}</p>
+            <div class="logo-area-right">
+                {% if invoice.organization.logo_url %}
+                    {% if invoice.organization.logo_url.startswith('http') %}
+                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% elif SERVER_HOST %}
+                        <img src="{{ SERVER_HOST }}{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% else %}
+                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
 
-        <div class="customer-info-section">
-            <h3>CONSIGNEE / BILL TO:</h3> 
-            <p><strong>{{ invoice.customer.company_name }}</strong></p>
-            {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
-            <p>{{ invoice.customer.billing_address_line1 or '' }}</p>
-            {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{% endif %}
-            <p>
-                {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}
-            </p>
-            <p>{{ invoice.customer.billing_country or '' }}</p>
-            {% if invoice.customer.email %}<p><strong>Email:</strong> {{ invoice.customer.email }}</p>{% endif %}
-            {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>{% endif %}
+        <div class="document-details-bar">
+            <div class="document-number"><strong>Packing List #:</strong> {{ invoice.invoice_number }}</div>
+            <div class="document-date"><strong>Date:</strong> {{ invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '' }}</div>
+            <div class="document-ref">
+                {# Optional: {% if invoice.ref_commercial_invoice_no %}<strong>Ref. Invoice:</strong> {{ invoice.ref_commercial_invoice_no }} {% endif %} #}
+            </div> 
+        </div>
+
+        <div class="customer-section">
+            <div class="customer-details">
+                <h3>CONSIGNEE:</h3>
+                <p><strong>{{ invoice.customer.company_name }}</strong></p>
+                {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
+                {% if invoice.customer.email %}<p><strong>Email:</strong> {{ invoice.customer.email }}</p>{% endif %}
+                {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>{% endif %}
+            </div>
+            <div class="address-details"> 
+                <h3>SHIPPING ADDRESS:</h3>
+                <p>{{ invoice.customer.billing_address_line1 or '' }}</p> 
+                {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{% endif %}
+                <p>
+                    {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}
+                </p>
+                <p>{{ invoice.customer.billing_country or '' }}</p>
+            </div>
         </div>
 
         <table class="items-table">
             <thead>
                 <tr>
                     <th style="width: 4%;" class="text-center">#</th>
-                    <th class="item-image-col" style="width: 7%;">Image</th>
-                    <th style="width: 29%;">Description</th>
-                    <th style="width: 8%;" class="text-center">Qty (U)</th>
-                    <th style="width: 8%;" class="text-center">Qty (C)</th>
-                    <th style="width: 8%;" class="text-center">Unit Type</th>
+                    <th style="width: 35%;">Description</th>
+                    {% set unit_header_label = "UNITS" %}
+                    {% if invoice.line_items and invoice.line_items[0] and invoice.line_items[0].unit_type %}
+                        {% set unit_header_label = invoice.line_items[0].unit_type | upper %}
+                    {% endif %}
+                    <th style="width: 12%;" class="text-center">Qty ({{ unit_header_label }})</th>
+                    <th style="width: 12%;" class="text-center">Qty (CTNs)</th>
                     <th style="width: 12%;" class="text-right">Net Wt (kg)</th>
                     <th style="width: 12%;" class="text-right">Gross Wt (kg)</th>
-                    <th style="width: 12%;" class="text-right">CBM (m³)</th>
+                    <th style="width: 13%;" class="text-right">CBM (m³)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item_line in invoice.line_items %}
                 <tr>
                     <td class="text-center">{{ loop.index }}</td>
-                    <td class="item-image-col">
-                        {% if item_line.item and item_line.item.image_url %}
-                            <img src="{{ item_line.item.image_url }}" alt="{{ item_line.item_description }}">
-                        {% else %}
-                            <span>-</span>
-                        {% endif %}
-                    </td>
                     <td class="description-cell">
                         {{ item_line.item_description }}
                         {% if item_line.item_specific_comments %}<br><small><em>{{ item_line.item_specific_comments }}</em></small>{% endif %}
                     </td>
-                    <td class="text-center">{{ item_line.quantity_units if item_line.quantity_units is not none else '-' }}</td>
-                    <td class="text-center">{{ item_line.quantity_cartons if item_line.quantity_cartons is not none else '-' }}</td>
-                    <td class="text-center">{{ item_line.unit_type }}</td>
+                    <td class="text-center">{{ "%.0f"|format(item_line.quantity_units) if item_line.quantity_units is not none else '-' }}</td>
+                    <td class="text-center">{{ "%.0f"|format(item_line.quantity_cartons) if item_line.quantity_cartons is not none else '-' }}</td>
                     <td class="text-right">{{ "%.2f"|format(item_line.net_weight_kgs) if item_line.net_weight_kgs is not none else '-' }}</td>
                     <td class="text-right">{{ "%.2f"|format(item_line.gross_weight_kgs) if item_line.gross_weight_kgs is not none else '-' }}</td>
                     <td class="text-right">{{ "%.3f"|format(item_line.measurement_cbm) if item_line.measurement_cbm is not none else '-' }}</td>
                 </tr>
+                 {% if item_line.item and item_line.item.images and item_line.item.images|length > 0 %}
+                <tr class="item-images-row {% if loop.index0 % 2 == 0 %}alt-row-bg{% endif %}">
+                    <td colspan="7"> 
+                        <div class="item-images-container">
+                            {% for image in item_line.item.images %}
+                                <img src="{{ SERVER_HOST }}{{ image.image_url }}" alt="{{ image.alt_text or (item_line.item_description + ' image ' + loop.index|string) }}">
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
                 {% else %}
                 <tr>
-                    <td colspan="9" style="text-align: center; padding: 20px;">No line items.</td>
+                    <td colspan="7" style="text-align: center; padding: 20px;">No line items.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-
-        {# Totals Section is REMOVED for Packing List #}
-
-        {# Shipping information - shows if any of these fields have data on the Packing List object #}
+        
         {% if invoice.container_number or invoice.seal_number or invoice.hs_code or invoice.bl_number %}
         <div class="info-block-section"> 
             <h3>Shipping Information:</h3>
-            <table>
-                {% if invoice.container_number %}
-                <tr>
-                    <td>Container Number:</td>
-                    <td>{{ invoice.container_number }}</td>
-                </tr>
-                {% endif %}
-                {% if invoice.seal_number %}
-                <tr>
-                    <td>Seal Number:</td>
-                    <td>{{ invoice.seal_number }}</td>
-                </tr>
-                {% endif %}
-                {% if invoice.hs_code %}
-                <tr>
-                    <td>H.S. Code:</td>
-                    <td>{{ invoice.hs_code }}</td>
-                </tr>
-                {% endif %}
-                {# --- ADDED B/L NUMBER DISPLAY (conditionally within the shipping block) --- #}
-                {# The outer 'if' for info-block-section already checks if bl_number has a value, so this will only show if bl_number is true #}
-                {# However, the friend's feedback had specific logic for PACKING_LIST type, which is safer if bl_number is only for packing lists #}
-                {% if invoice.invoice_type.value == "PACKING_LIST" and invoice.bl_number %} 
-                <tr>
-                    <td>B/L Number:</td>
-                    <td>{{ invoice.bl_number }}</td>
-                </tr>
-                {% endif %}
-                {# --- END B/L NUMBER DISPLAY --- #}
-            </table>
+            <p class="block-text-content">{% if invoice.container_number %}<strong>Container #:</strong> {{ invoice.container_number }}<br>{% endif %}{% if invoice.seal_number %}<strong>Seal #:</strong> {{ invoice.seal_number }}<br>{% endif %}{% if invoice.hs_code %}<strong>H.S. Code:</strong> {{ invoice.hs_code }}<br>{% endif %}{% if invoice.bl_number %}<strong>B/L Number:</strong> {{ invoice.bl_number }}{% endif %}</p>
         </div>
         {% endif %}
 
         {% if invoice.comments_notes %}
         <div class="info-block-section">
             <h3>Comments / Notes:</h3>
-            <div class="notes-content">
-{{ invoice.comments_notes }}
-            </div>
+            <p class="block-text-content">{{ invoice.comments_notes }}</p>
         </div>
         {% endif %}
         
         <div class="footer-section">
             <p>Shipped By: {{ invoice.organization.name }}</p>
-            <p>If you have any questions concerning this shipment, please contact us.</p>
         </div>
     </div>
 </body>

@@ -6,6 +6,6 @@ class CustomBase:
     # Generate __tablename__ automatically
     @declared_attr
     def __tablename__(cls) -> str:
-        return cls.__name__.lower() + "s" # e.g., User -> users, InvoiceItem -> invoiceitems
+        return cls.__name__.lower() + "s"
 
 Base: Any = declarative_base(cls=CustomBase)

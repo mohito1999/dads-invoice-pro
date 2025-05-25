@@ -2,12 +2,26 @@ from fastapi import FastAPI
 from app.api import api_router  # We will create this soon
 from app.core.config import settings # We will create this soon
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+APP_DIR = Path(__file__).resolve().parent 
+BASE_DIR = APP_DIR.parent # This is backend/
+STATIC_DIR = BASE_DIR / "static" 
+# UPLOAD_DIR for saving files will be STATIC_DIR / "uploads"
+# (Individual endpoints will handle subdirectories like org_logos, item_images)
+
+# Ensure the base static directory exists (uploads and its subdirs will be created by endpoints)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     version=settings.PROJECT_VERSION
 )
+
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # --- BEGIN CORS MIDDLEWARE SETUP ---
 # Define a list of origins that are allowed to make cross-origin requests.
