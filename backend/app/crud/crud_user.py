@@ -94,6 +94,17 @@ async def authenticate_user(
         return None
     return user
 
-# We might not need a direct delete_user CRUD if users are soft-deleted
-# or deletion is handled very carefully. For now, let's omit it unless specifically requested.
-# async def delete_user(db: AsyncSession, *, user_id: uuid.UUID) -> UserModel | None: ...
+
+async def delete_user(db: AsyncSession, *, user_to_delete: UserModel) -> UserModel:
+    """
+    Delete a user from the database.
+    WARNING: This will cascade delete related organizations, customers, items, and invoices
+    if the relationships are configured with cascade="all, delete-orphan".
+    """
+    # The user_to_delete object is already fetched and verified by the API layer
+    await db.delete(user_to_delete)
+    await db.commit()
+    # The object is now detached from the session and effectively deleted from DB.
+    # Returning it might be for logging or confirmation, but its relationships might be stale.
+    return user_to_delete
+

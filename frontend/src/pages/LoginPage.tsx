@@ -18,7 +18,7 @@ const LoginPage = () => {
     const location = useLocation();
     const { login } = useAuth();
 
-    const from = location.state?.from?.pathname || ""; // Changed default to /dashboard
+    const from = location.state?.from?.pathname || "/"; // Changed default to /dashboard
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -37,8 +37,6 @@ const LoginPage = () => {
         });
         
         const { access_token } = response.data;
-        console.log("DEBUG: LoginPage - access_token received:", access_token); // <<< ADD THIS
-        console.log("DEBUG: LoginPage - Auth header being sent for /users/me:", `Bearer ${access_token}`); // <<< ADD THIS
 
         const userProfileResponse = await apiClient.get('/users/me', {
             headers: { Authorization: `Bearer ${access_token}` }
