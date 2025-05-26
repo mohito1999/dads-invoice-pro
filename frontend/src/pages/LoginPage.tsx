@@ -1,6 +1,6 @@
 // src/pages/LoginPage.tsx
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ const LoginPage = () => {
     const location = useLocation();
     const { login } = useAuth();
 
-    const from = location.state?.from?.pathname || "/dashboard"; // Changed default to /dashboard
+    const from = location.state?.from?.pathname || ""; // Changed default to /dashboard
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -37,6 +37,8 @@ const LoginPage = () => {
         });
         
         const { access_token } = response.data;
+        console.log("DEBUG: LoginPage - access_token received:", access_token); // <<< ADD THIS
+        console.log("DEBUG: LoginPage - Auth header being sent for /users/me:", `Bearer ${access_token}`); // <<< ADD THIS
 
         const userProfileResponse = await apiClient.get('/users/me', {
             headers: { Authorization: `Bearer ${access_token}` }
@@ -104,16 +106,15 @@ const LoginPage = () => {
               )}
             </CardContent>
             <CardFooter className="flex flex-col pt-2"> {/* Use flex-col for footer elements, reduced pt */}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full mt-2" disabled={isLoading}>
                 {isLoading ? 'Logging in...' : 'Login'}
               </Button>
-              {/* You can add links like "Forgot password?" or "Sign up" here if needed */}
-              {/* <div className="mt-4 text-center text-sm">
+              <div className="mt-4 text-center text-sm"> {/* Added mt-2 for a bit of space */}
                 Don't have an account?{' '}
-                <Link to="/signup" className="underline">
-                  Sign up
+                <Link to="/signup" className="underline hover:text-primary">
+                  Sign Up
                 </Link>
-              </div> */}
+              </div>
             </CardFooter>
           </form>
         </Card>

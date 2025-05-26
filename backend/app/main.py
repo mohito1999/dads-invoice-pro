@@ -4,6 +4,10 @@ from app.core.config import settings # We will create this soon
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import logging
+from fastapi import Request
+logger = logging.getLogger(__name__) # Get a logger instance
+
 
 APP_DIR = Path(__file__).resolve().parent 
 BASE_DIR = APP_DIR.parent # This is backend/
@@ -19,6 +23,18 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     version=settings.PROJECT_VERSION
 )
+
+
+# --- ADD THIS DEBUGGING MIDDLEWARE ---
+@app.middleware("http")
+async def debug_request_path_middleware(request: Request, call_next):
+    print(f"DEBUG MIDDLEWARE: Path: {request.url.path}, Method: {request.method}, Full URL: {request.url}")
+    print(f"DEBUG MIDDLEWARE: Scope Path: {request.scope.get('path')}")
+    print(f"DEBUG MIDDLEWARE: Scope Raw Path: {request.scope.get('raw_path')}") # if available
+    print(f"DEBUG MIDDLEWARE: Scope Root Path: {request.scope.get('root_path')}")
+    response = await call_next(request)
+    return response
+# --- END DEBUGGING MIDDLEWARE ---
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -47,6 +63,10 @@ app.add_middleware(
     allow_headers=["*"],    # Allow all headers
 )
 # --- END CORS MIDDLEWARE SETUP ---
+
+# Ensure settings.API_V1_STR is definitely "/api/v1"
+if settings.API_V1_STR != "/api/v1":
+    logger.warning(f"WARNING: settings.API_V1_STR is '{settings.API_V1_STR}', expected '/api/v1'. This might affect routing.")
 
 # Include the main API router
 app.include_router(api_router, prefix=settings.API_V1_STR)

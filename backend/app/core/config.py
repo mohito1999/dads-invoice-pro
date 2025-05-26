@@ -63,10 +63,4 @@ if settings.POSTGRES_USER and settings.POSTGRES_PASSWORD and \
 else:
     print("Database URL could not be constructed. Check POSTGRES environment variables in .env and config defaults.")
 
-# ---- TEMPORARY DEBUG (keep this for now) ----
-print(f"DEBUG: Config File Path: {Path(__file__).resolve()}")
-# ... rest of debug prints ...
-print(f"DEBUG: Loaded POSTGRES_PASSWORD from settings: {settings.POSTGRES_PASSWORD}")
-print(f"DEBUG: URL Encoded Password: {encoded_password if 'encoded_password' in locals() else 'Not Set'}") # Print encoded
-print(f"DEBUG: Constructed DATABASE_URL: {settings.DATABASE_URL}")
-# ---- END TEMPORARY DEBUG ----
+

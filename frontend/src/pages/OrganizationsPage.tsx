@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, // DialogTrigger removed as it's used with asChild
 } from "@/components/ui/dialog";
 import OrganizationForm from '@/components/organizations/OrganizationForm';
 import {
@@ -22,16 +22,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  // AlertDialogTrigger, // We trigger it programmatically
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MoreHorizontal, PlusCircle, Edit2Icon, Trash2Icon, EyeIcon } from "lucide-react";
-import { useOrg } from '@/contexts/OrgContext'; // Assuming this is used for isLoadingActiveOrg
+import { useOrg } from '@/contexts/OrgContext';
 import { toast } from 'sonner';
+import { getFullStaticUrl } from '@/config'; // <<< IMPORT THE HELPER
 
 const OrganizationsPage = () => {
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For fetching organizations list
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -42,7 +42,7 @@ const OrganizationsPage = () => {
   const [orgToDelete, setOrgToDelete] = useState<OrganizationSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { refreshUserOrganizations, isLoading: isLoadingActiveOrg } = useOrg(); // Assuming isLoadingActiveOrg is from OrgContext
+  const { refreshUserOrganizations, isLoadingOrgs: isLoadingActiveOrg } = useOrg();
 
   const fetchOrganizations = async () => {
     setIsLoading(true);
@@ -81,8 +81,8 @@ const OrganizationsPage = () => {
   };
 
   const handleFormSuccess = async (processedOrganization: Organization) => {
-    fetchOrganizations();
-    await refreshUserOrganizations();
+    fetchOrganizations(); // Refetch the list
+    await refreshUserOrganizations(); // Refresh context if needed
     setIsFormModalOpen(false);
     toast.success(`Organization "${processedOrganization.name}" ${formMode === 'create' ? 'created' : 'updated'} successfully!`);
   };
@@ -100,12 +100,12 @@ const OrganizationsPage = () => {
       await apiClient.delete(`/organizations/${orgToDelete.id}`);
       setOrganizations(prevOrgs => prevOrgs.filter(o => o.id !== orgToDelete.id));
       await refreshUserOrganizations();
-      // fetchOrganizations(); // Re-fetching after optimistic update + refresh might be redundant
       toast.success(`Organization "${orgToDelete.name}" deleted successfully.`);
     } catch (err: any) {
       console.error("Failed to delete organization:", err);
-      setError(err.response?.data?.detail || "Failed to delete organization.");
-      toast.error(err.response?.data?.detail || "Failed to delete organization.");
+      const errorMsg = err.response?.data?.detail || "Failed to delete organization.";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
@@ -113,7 +113,6 @@ const OrganizationsPage = () => {
     }
   };
 
-  // This assumes isLoadingActiveOrg is relevant for this page, similar to CustomersPage
   if (isLoadingActiveOrg) {
     return <div className="container mx-auto px-4 py-10 text-center">Loading organization context...</div>;
   }
@@ -127,15 +126,10 @@ const OrganizationsPage = () => {
       <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-6">
         <div className="flex justify-between items-center">
             <h1 className="text-2xl sm:text-3xl font-bold">Organizations</h1>
-             {/* Optionally show create button even on error */}
         </div>
         <Card className="w-full">
-            <CardHeader>
-                <CardTitle>Manage Organizations</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-center py-10 text-destructive">{error}</div>
-            </CardContent>
+            <CardHeader> <CardTitle>Manage Organizations</CardTitle> </CardHeader>
+            <CardContent> <div className="text-center py-10 text-destructive">{error}</div> </CardContent>
         </Card>
       </div>
     );
@@ -146,11 +140,10 @@ const OrganizationsPage = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h1 className="text-2xl sm:text-3xl font-bold">Organizations</h1>
             <Dialog open={isFormModalOpen} onOpenChange={setIsFormModalOpen}>
-                <DialogTrigger asChild>
-                    <Button onClick={handleOpenCreateModal}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Create Organization
-                    </Button>
-                </DialogTrigger>
+                 {/* DialogTrigger is now part of the Button component via asChild prop */}
+                <Button onClick={handleOpenCreateModal}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Create Organization
+                </Button>
                 <DialogContent className="sm:max-w-[525px]">
                     <DialogHeader>
                         <DialogTitle>{formMode === 'create' ? 'Create New Organization' : 'Edit Organization'}</DialogTitle>
@@ -160,7 +153,7 @@ const OrganizationsPage = () => {
                             : `Editing organization: ${currentOrganization?.name || ''}`}
                         </DialogDescription>
                     </DialogHeader>
-                     {isFormModalOpen && (formMode === 'create' || (formMode === 'edit' && currentOrganization)) && (
+                     {isFormModalOpen && (formMode === 'create' || (formMode === 'edit' && currentOrganization !== undefined)) && (
                         <OrganizationForm
                             mode={formMode}
                             initialData={currentOrganization}
@@ -174,8 +167,6 @@ const OrganizationsPage = () => {
 
         <Card className="w-full">
             <CardHeader>
-                {/* <CardTitle>Your Organizations</CardTitle> */}
-                {/* Error specific to table data, shown if list might be partially loaded or after an action error */}
                 {error && <p className="text-sm text-destructive py-2 px-1 text-center">{error}</p>}
             </CardHeader>
             <CardContent>
@@ -188,7 +179,7 @@ const OrganizationsPage = () => {
                         </Button>
                     </div>
                 ) : (
-                <div className="rounded-md border"> {/* Added border around table for consistency if not part of Table itself */}
+                <div className="rounded-md border">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -203,16 +194,19 @@ const OrganizationsPage = () => {
                                 <TableRow key={org.id}>
                                 <TableCell>
                                     {org.logo_url ? (
-                                    <img src={org.logo_url} alt={`${org.name} logo`} className="h-10 w-10 object-contain rounded-sm bg-accent p-0.5" />
+                                    <img 
+                                        src={getFullStaticUrl(org.logo_url)} // <<< APPLY HELPER
+                                        alt={`${org.name} logo`} 
+                                        className="h-10 w-10 object-contain rounded-sm bg-accent p-0.5" 
+                                    />
                                     ) : (
                                     <div className="h-10 w-10 bg-muted rounded-sm flex items-center justify-center text-muted-foreground text-xs">
-                                        
+                                        {/* Placeholder if no logo */}
                                     </div>
                                     )}
                                 </TableCell>
                                 <TableCell className="font-medium">{org.name}</TableCell>
                                 <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                                    {/* Assuming OrganizationSummary includes contact_email or using type assertion */}
                                     {(org as Organization).contact_email || 'N/A'}
                                 </TableCell> 
                                 <TableCell className="text-right">
@@ -243,7 +237,6 @@ const OrganizationsPage = () => {
                     </Table>
                 </div>
                 )}
-                {/* Loading indicator for subsequent fetches */}
                 {isLoading && organizations.length > 0 && (
                      <div className="text-center py-4 text-sm text-muted-foreground">Refreshing organizations...</div>
                 )}

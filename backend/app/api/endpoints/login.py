@@ -14,6 +14,7 @@ async def login_for_access_token(
     db: AsyncSession = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends() # Username is form_data.username, password is form_data.password
 ):
+
     """
     OAuth2 compatible token login, get an access token for future requests.
     'username' field in the form should be the user's email.
