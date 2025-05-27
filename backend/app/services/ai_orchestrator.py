@@ -82,6 +82,44 @@ async def execute_create_customer_func(db: AsyncSession, org_id: uuid.UUID, user
         traceback.print_exc()
         return {"status": "error", "message": f"Failed to create customer: {str(e)}"}
     
+async def execute_get_customers_for_organization(db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID) -> Dict[str, Any]:
+    # user_id is passed for consistency, org_id is key here for filtering
+    customers = await crud.customer.get_customers_by_organization(db, organization_id=org_id, limit=50) # Limit for AI context
+    if customers:
+        # Using CustomerSummary schema for the list view
+        customer_summaries = [
+            make_model_dump_json_serializable(schemas.CustomerSummary.model_validate(cust).model_dump()) 
+            for cust in customers
+        ]
+        return {"status": "success", "count": len(customer_summaries), "customers": customer_summaries}
+    return {"status": "not_found", "message": "No customers found for this organization."}
+
+async def execute_delete_customer_func(db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, customer_id: str) -> Dict[str, Any]:
+    try:
+        customer_uuid = uuid.UUID(customer_id)
+    except ValueError:
+        return {"status": "error", "message": f"Invalid customer_id format: {customer_id}"}
+
+    db_customer = await crud.customer.get_customer(db, customer_id=customer_uuid)
+    if not db_customer:
+        return {"status": "not_found", "message": f"Customer with ID '{customer_id}' not found."}
+
+    # Authorization: Ensure the customer belongs to the active organization
+    if db_customer.organization_id != org_id:
+        return {"status": "auth_error", "message": "Customer does not belong to the active organization or you are not authorized."}
+    
+    # Ensure the user performing the delete owns the organization (redundant if org_id is already validated from active_organization)
+    # This is more about ensuring the operation is on the right org context.
+    # The active_organization passed to process_user_message already confirms user's access to org_id.
+
+    try:
+        deleted_customer_info = {"id": str(db_customer.id), "company_name": db_customer.company_name}
+        await crud.customer.delete_customer(db, db_obj=db_customer)
+        return {"status": "success", "message": f"Customer '{deleted_customer_info['company_name']}' (ID: {deleted_customer_info['id']}) has been deleted."}
+    except Exception as e:
+        traceback.print_exc()
+        return {"status": "error", "message": f"Failed to delete customer: {str(e)}"}
+    
 async def execute_update_customer_func(db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, customer_id: str, **kwargs) -> Dict[str, Any]:
     try:
         customer_uuid = uuid.UUID(customer_id)
@@ -375,6 +413,8 @@ TOOL_EXECUTORS = {
     "get_customer_by_name": execute_get_customer_by_name,
     "create_customer_func": execute_create_customer_func,
     "update_customer_func": execute_update_customer_func,
+    "delete_customer_func": execute_delete_customer_func,
+    "get_customers_for_organization": execute_get_customers_for_organization,
     "get_item_by_name": execute_get_item_by_name,
     "create_item_func": execute_create_item_func,
     "get_items_for_organization": execute_get_items_for_organization,
@@ -404,7 +444,7 @@ async def process_user_message(
     
     if not gemini_sdk_client:
         return "AI service is currently unavailable (client not initialized).", conversation_history, None
-    if not active_organization: # This check is important
+    if not active_organization: 
         return "Please select an active organization first to use AI features.", conversation_history, None
 
     # Prepare history for google-genai SDK
@@ -418,25 +458,34 @@ async def process_user_message(
         actual_gemini_role_for_history = role 
 
         for p_item in parts_data_list:
-            if role == "user" or role == "model":
+            if role == "user":
                 text_content = p_item if isinstance(p_item, str) else p_item.get("text", "")
                 if text_content: gemini_parts_for_content.append(types.Part.from_text(text=text_content))
+                actual_gemini_role_for_history = "user"
+            elif role == "model": 
+                text_content = p_item if isinstance(p_item, str) else p_item.get("text", "")
+                if text_content: gemini_parts_for_content.append(types.Part.from_text(text=text_content))
+                actual_gemini_role_for_history = "model"
             elif role == "function_call_request": 
                 if isinstance(p_item, dict) and "name" in p_item and "args" in p_item:
                     gemini_parts_for_content.append(types.Part.from_function_call(
                         name=p_item["name"], args=p_item["args"]
                     ))
-                actual_gemini_role_for_history = "model" 
+                actual_gemini_role_for_history = "model"
             elif role == "function_call_response":
                 # Omit from initial history for client.chats.create()
+                print(f"Skipping role '{role}' for client.chats.create() history: {p_item}")
                 continue 
         
         if gemini_parts_for_content:
-            gemini_sdk_history.append(types.Content(role=actual_gemini_role_for_history, parts=gemini_parts_for_content))
+            if not gemini_parts_for_content and role == "function_call_response": 
+                pass # Should not happen due to continue above
+            else:
+                gemini_sdk_history.append(types.Content(role=actual_gemini_role_for_history, parts=gemini_parts_for_content))
         elif role != "function_call_response": 
              print(f"Warning: No parts created for history entry role '{role}', data: {entry}")
     
-    # System instruction using the CoT/ReAct style
+    # System instruction text, formatted dynamically per call
     system_instruction_text = f"""
     You are "ProVoice AI", a meticulous and intelligent assistant for Dad's Invoice Pro.
     Your primary goal is to understand the user's request, form a plan by thinking step-by-step, execute the plan using available tools, and respond clearly.
@@ -456,141 +505,154 @@ async def process_user_message(
         *   Based on the Goal and current information (including recalled context), what is the single most logical tool to call?
         *   Do I need to check for existing entities *again* if the user's reference is ambiguous (e.g., "the Smith invoice" when there are multiple Smiths)?
     4.  **Clarification (If Needed):** If information is missing (especially a required ID that you can't infer from recent context) or ambiguous for THIS PLANNED TOOL CALL, use the `ask_clarifying_question` tool.
-    5.  **Execution & Observation:** (As before)
-    6.  **Re-evaluate & Plan Next Step / Respond to User:** (As before)
+    5.  **Execution & Observation:** When you decide to use a tool, state the tool name and its arguments as a FunctionCall. You will receive the result of that tool call.
+    6.  **Re-evaluate & Plan Next Step / Respond to User:** Based on the tool's result: Did the tool succeed? Is the overall Goal achieved? If yes, summarize. If not, what's the next logical tool or info needed? Repeat from step 2/3. If an error occurred, inform the user and ask how to proceed.
 
     **Tool Usage Guidelines:**
+    *   **Customer Management:** You can get customer details by name (`get_customer_by_name`), list all customers for the organization (`get_customers_for_organization`), create new customers (`create_customer_func`), update existing ones (`update_customer_func`), and delete customers (`delete_customer_func`). For updates and deletes, you MUST have the `customer_id`.
+    *   **Item Management:** You can get item details by name (`get_item_by_name`), by ID (`get_item_details_by_id`), list all items (`get_items_for_organization`), create new items (`create_item_func`), update (`update_item_func`), and delete them (`delete_item_func`). IDs are needed for update/delete.
+    *   **Invoice Management:** You can create invoices (`create_invoice_func`), list them with filters (`get_invoices_for_user`), get specific invoice details (`get_invoice_details_by_id`), update (`update_invoice_func`), delete (`delete_invoice_func`), transform pro-formas (`transform_invoice_to_commercial_func`), generate packing lists (`generate_packing_list_func`), record payments (`record_payment_func`), and signal PDF downloads (`signal_download_invoice_pdf`).
     *   **IDs are Critical:** Many tools require specific UUIDs. These UUIDs MUST be obtained from previous successful `get_..._by_name`, `get_..._by_id`, or `create_..._func` calls within the current conversation. Do NOT invent UUIDs. If you need an ID and don't have it, your plan must include a step to get it.
     *   **Existence Checks:** ALWAYS check if a customer or item exists using `get_customer_by_name` or `get_item_by_name` before attempting to create a new one for that *same name*, unless the user explicitly says "create a NEW customer/item". If it exists, use its ID.
-    **Transforming/Generating from Existing:**
-        *   When using `transform_invoice_to_commercial_func` or `generate_packing_list_func`, the user might say "transform the pro forma invoice we just talked about" or "generate a packing list for that commercial invoice". You MUST use the ID of the invoice that was the subject of the recent conversation for the `pro_forma_invoice_id` or `commercial_invoice_id` parameter. If you are not certain which ID to use, ask for clarification using the invoice number or ID.
+    *   **Transforming/Generating from Existing:** When using `transform_invoice_to_commercial_func` or `generate_packing_list_func`, the user might say "transform the pro forma invoice we just talked about" or "generate a packing list for that commercial invoice". You MUST use the ID of the invoice that was the subject of the recent conversation for the `pro_forma_invoice_id` or `commercial_invoice_id` parameter. If you are not certain which ID to use, ask for clarification using the invoice number or ID.
     *   **Optional Fields:** If the user doesn't provide optional information for creation/updates, that's okay; the tools will handle them as null/default. Only ask for optional fields if they are crucial for the user's stated goal or if a tool fails due to their absence for a specific operation.
-    *   **Invoice Line Items (Iterative Process for `create_invoice_func` or `update_invoice_func`):**
-        *   Confirm the customer ID first.
-        *   Ask for invoice header details (type, currency).
-        *   Then, for EACH item: ask for description, quantity, price. Check/create item master if needed (`get_item_by_name`, then `create_item_func`). Collect all line item details.
-        *   After all items, ask for final details (notes, tax, etc.).
-        *   Then, call `create_invoice_func` or `update_invoice_func` with the complete payload.
-    *   **PDFs:** The `signal_download_invoice_pdf` tool tells the system the user wants a PDF. Your response should just be an acknowledgement like, "Okay, you can download the PDF for invoice [number] now." The system handles the actual download mechanism.
+    *   **Invoice Line Items (Iterative Process for `create_invoice_func` or `update_invoice_func`):** Confirm customer ID. Ask for invoice header (type, currency). Then, for EACH item: ask for description, quantity, price. Check/create item master (`get_item_by_name`, then `create_item_func`). Collect line item details. After all items, ask for final details (notes, tax, etc.). Then, call `create_invoice_func` or `update_invoice_func`.
+    *   **PDFs:** The `signal_download_invoice_pdf` tool tells the system the user wants a PDF. Your response should just be an acknowledgement.
 
     Be helpful, clear, and ensure you have necessary information before acting. Break down complex requests.
     """
     
+    # Initialize with a default error/fallback message
+    ai_response_text: str = "I'm having a little trouble processing that. Could you try rephrasing or try again in a moment?" 
+    follow_up_question_for_user: Optional[str] = None
+    # Start with a mutable copy of the history provided by the client
+    updated_history = list(conversation_history) 
+    # Add the current user message to our tracking history immediately
+    if not updated_history or updated_history[-1].get("role") != "user" or updated_history[-1].get("parts") != [user_message]:
+        updated_history.append({"role": "user", "parts": [user_message]})
+
     try:
         chat_session = gemini_sdk_client.aio.chats.create( 
             model=f"models/{settings.GEMINI_MODEL_NAME}", 
-            history=gemini_sdk_history
+            history=gemini_sdk_history # This history is for SDK, only user/model roles
         )
                                                      
         print(f"Sending to Gemini. SDK History for create: {len(gemini_sdk_history)}. User message: {user_message}")
         
         current_generation_config = types.GenerateContentConfig(
             tools=ALL_TOOLS,
-            # System instruction is now part of the model config or first turn history usually
-            # Forcing it on every turn with GenerateContentConfig if history is empty
+            # System instruction is passed here, especially if it's dynamic or for the first turn.
+            # If gemini_sdk_history is empty, this provides the initial context.
             system_instruction=system_instruction_text if not gemini_sdk_history else None, 
-            temperature=0.5, # Slightly lower temperature for more deterministic planning
+            temperature=0.5,
         )
         
-        response = await chat_session.send_message(
+        current_response = await chat_session.send_message(
             user_message, 
             config=current_generation_config
         )
-    except Exception as e:
-        print(f"Error during Gemini chat session creation or initial send_message: {e}")
-        traceback.print_exc()
-        return "Sorry, I encountered an error trying to process your request with the AI service.", conversation_history, None
-    
-    ai_response_text = ""
-    follow_up_question_for_user = None
-    updated_history = list(conversation_history) 
-    updated_history.append({"role": "user", "parts": [user_message]})
-
-    current_response = response
-    MAX_TOOL_ITERATIONS = 7 # Increased slightly for more complex plans
-    tool_iterations = 0
-
-    while tool_iterations < MAX_TOOL_ITERATIONS:
-        tool_iterations += 1
-
-        if not current_response or not current_response.function_calls:
-            try:
-                ai_response_text = current_response.text
-                if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                    updated_history.append({"role": "model", "parts": [ai_response_text]})
-            except ValueError: 
-                # ... (same error handling for .text access as before)
-                if current_response and current_response.candidates and current_response.candidates[0].finish_reason:
-                    print(f"Candidate Finish Reason: {current_response.candidates[0].finish_reason.name}")
-                    if current_response.candidates[0].finish_reason == types.Candidate.FinishReason.SAFETY:
-                        ai_response_text = "My response was blocked due to safety settings."
-                    else:
-                        ai_response_text = f"Response generation stopped: {current_response.candidates[0].finish_reason.name}."
-                else:
-                    ai_response_text = "I received an empty or complex response from the AI."
-                print(f"Response that caused text error or was empty: {current_response}")
-                if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                    updated_history.append({"role": "model", "parts": [ai_response_text]})
-            except AttributeError: # If current_response is None
-                ai_response_text = "An unexpected issue occurred after a tool call. Please try again."
-                print(f"current_response was None or missing attributes before accessing .text")
-                if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                    updated_history.append({"role": "model", "parts": [ai_response_text]})
-            break 
-
-        # Process the first function call if multiple are returned (usually one per turn from Gemini function calling)
-        fc_to_process = current_response.function_calls[0]
-        tool_name = fc_to_process.name
-        tool_args = dict(fc_to_process.args) 
-
-        print(f"LLM wants to call tool: {tool_name} with args: {tool_args}")
-        fc_requests_for_history = [{"name": fc.name, "args": dict(fc.args)} for fc in current_response.function_calls]
-        if not any(h_entry.get("role") == "function_call_request" and h_entry.get("parts") == fc_requests_for_history for h_entry in updated_history[-2:]):
-            updated_history.append({"role": "function_call_request", "parts": fc_requests_for_history})
-
-        if tool_name == "ask_clarifying_question":
-            follow_up_question_for_user = tool_args.get("question_to_user", "I need more information. Can you clarify?")
-            ai_response_text = follow_up_question_for_user
-            if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                updated_history.append({"role": "model", "parts": [ai_response_text]})
-            return ai_response_text, updated_history, follow_up_question_for_user
-
-        elif tool_name in TOOL_EXECUTORS:
-            executor = TOOL_EXECUTORS[tool_name]
-            try:
-                tool_result = await executor(db=db, org_id=active_organization.id, user_id=current_user.id, **tool_args)
-            except Exception as exec_e:
-                print(f"Error executing tool {tool_name}: {exec_e}")
-                traceback.print_exc()
-                tool_result = {"status": "error", "message": f"System error executing tool {tool_name}: {str(exec_e)}"}
-            
-            print(f"Tool {tool_name} result: {tool_result}")
-
-            if not any(h_entry.get("role") == "function_call_response" and h_entry.get("parts") == [{"name": tool_name, "response": tool_result}] for h_entry in updated_history[-2:]):
-                updated_history.append({"role": "function_call_response", "parts": [{"name": tool_name, "response": tool_result}]})
-            
-            function_response_part = types.Part.from_function_response(name=tool_name, response=tool_result)
-            
-            print(f"Sending tool result back to Gemini for {tool_name}")
-            try:
-                current_response = await chat_session.send_message(function_response_part, config=current_generation_config)
-            except Exception as send_e:
-                print(f"Error sending tool response to Gemini: {send_e}")
-                traceback.print_exc()
-                ai_response_text = "Sorry, I encountered an error after processing the tool result."
-                if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                     updated_history.append({"role": "model", "parts": [ai_response_text]})
-                return ai_response_text, updated_history, None 
-        else: 
-            ai_response_text = f"Error: System error - Unknown tool '{tool_name}' requested by AI."
-            if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
-                updated_history.append({"role": "model", "parts": [ai_response_text]})
-            return ai_response_text, updated_history, None
         
-    if tool_iterations >= MAX_TOOL_ITERATIONS and not ai_response_text:
-        print("Warning: Reached max tool iterations without a final text response.")
-        ai_response_text = "I got into a bit of a processing loop. Could you please simplify your request or try again?"
-        if not any(h_entry.get("role") == "model" and h_entry.get("parts") == [ai_response_text] for h_entry in updated_history[-2:]):
+        MAX_TOOL_ITERATIONS = 7
+        tool_iterations = 0
+
+        while tool_iterations < MAX_TOOL_ITERATIONS:
+            tool_iterations += 1
+            print(f"DEBUG: Orchestrator loop iteration: {tool_iterations}")
+
+            if not current_response:
+                print(f"DEBUG: current_response is None at iteration {tool_iterations}. Breaking loop.")
+                ai_response_text = "An unexpected issue occurred (empty AI response after a step). Please try again."
+                break 
+
+            if current_response.function_calls:
+                fc_to_process = current_response.function_calls[0] # Process one primary function call
+                tool_name = fc_to_process.name
+                tool_args = dict(fc_to_process.args) 
+                
+                print(f"LLM wants to call tool: {tool_name} with args: {tool_args}")
+                fc_requests_for_history = [{"name": fc.name, "args": dict(fc.args)} for fc in current_response.function_calls]
+                if not updated_history or updated_history[-1].get("role") != "function_call_request" or updated_history[-1].get("parts") != fc_requests_for_history:
+                    updated_history.append({"role": "function_call_request", "parts": fc_requests_for_history})
+
+                if tool_name == "ask_clarifying_question":
+                    follow_up_question_for_user = tool_args.get("question_to_user", "I need more information. Can you clarify?")
+                    ai_response_text = follow_up_question_for_user 
+                    if not updated_history or updated_history[-1].get("role") != "model" or updated_history[-1].get("parts") != [ai_response_text]:
+                         updated_history.append({"role": "model", "parts": [ai_response_text]})
+                    return ai_response_text, updated_history, follow_up_question_for_user
+
+                elif tool_name in TOOL_EXECUTORS:
+                    executor = TOOL_EXECUTORS[tool_name]
+                    tool_result = await executor(db=db, org_id=active_organization.id, user_id=current_user.id, **tool_args)
+                    print(f"Tool {tool_name} result: {tool_result}")
+
+                    if not updated_history or updated_history[-1].get("role") != "function_call_response" or updated_history[-1].get("parts") != [{"name": tool_name, "response": tool_result}]:
+                        updated_history.append({"role": "function_call_response", "parts": [{"name": tool_name, "response": tool_result}]})
+                    
+                    function_response_part = types.Part.from_function_response(name=tool_name, response=tool_result)
+                    print(f"Sending tool result back to Gemini for {tool_name}")
+                    current_response = await chat_session.send_message(function_response_part, config=current_generation_config)
+                    # Continue loop
+                else: 
+                    ai_response_text = f"Error: System error - Unknown tool '{tool_name}' requested by AI."
+                    if not updated_history or updated_history[-1].get("role") != "model" or updated_history[-1].get("parts") != [ai_response_text]:
+                        updated_history.append({"role": "model", "parts": [ai_response_text]})
+                    return ai_response_text, updated_history, None 
+            
+            else: # No function calls in current_response, expect text
+                try:
+                    text_from_ai = current_response.text 
+                    if text_from_ai is not None:
+                        ai_response_text = text_from_ai
+                    else: 
+                        if current_response.candidates and current_response.candidates[0].finish_reason:
+                            reason = current_response.candidates[0].finish_reason.name
+                            print(f"DEBUG: Text is None. Candidate Finish Reason: {reason}")
+                            if reason == "SAFETY": ai_response_text = "My apologies, my response was blocked due to safety content filters."
+                            elif reason == "RECITATION": ai_response_text = "My apologies, my response was blocked due to recitation policy."
+                            elif reason == "MAX_TOKENS": ai_response_text = "The response is too long. Can I summarize?"
+                            else: ai_response_text = f"I couldn't generate a complete textual response (Reason: {reason}). Can you try rephrasing?"
+                        else:
+                            ai_response_text = "I didn't receive a textual response from the AI this time."
+                            print(f"DEBUG: current_response.text was None, and no clear finish_reason. Full response: {current_response}")
+                except ValueError as ve: 
+                    print(f"DEBUG: ValueError accessing current_response.text: {ve}")
+                    ai_response_text = "I received a response I couldn't quite understand. Could you try again?"
+                except AttributeError: 
+                    print(f"DEBUG: AttributeError, current_response might be malformed: {current_response}")
+                    ai_response_text = "An unexpected issue occurred with the AI's response. Please try again."
+                
+                if not updated_history or updated_history[-1].get("role") != "model" or updated_history[-1].get("parts") != [ai_response_text]:
+                    updated_history.append({"role": "model", "parts": [ai_response_text]})
+                break 
+        
+        # After loop, if ai_response_text is still the initial default, it means something went wrong or loop ended unexpectedly
+        if ai_response_text == "I'm having a little trouble processing that. Could you try rephrasing or try again in a moment?":
+            if tool_iterations >= MAX_TOOL_ITERATIONS:
+                print("Warning: Reached max tool iterations without a final text response different from default.")
+                ai_response_text = "I got into a bit of a processing loop and couldn't finalize a response. Could you please simplify your request or try again?"
+            else: # Loop broke for other reasons but ai_response_text wasn't updated from default
+                print("Warning: Loop ended, but AI response text is still the initial default. Check for unhandled paths.")
+                # Keep the default, or set a more specific "unexpected end" message.
+
+
+    except Exception as e: # Catch-all for the whole process_user_message
+        print(f"Critical error in process_user_message: {e}")
+        traceback.print_exc()
+        ai_response_text = "I'm sorry, a critical system error occurred while processing your request."
+        # Ensure user message is in history, then add this system error as the model's response
+        if not updated_history or updated_history[-1].get("role") != "user" or updated_history[-1].get("parts") != [user_message]:
+             # This case is unlikely if we add user message at the start of `updated_history`
+             updated_history.append({"role": "user", "parts": [user_message]})
+        if not updated_history or updated_history[-1].get("role") != "model" or updated_history[-1].get("parts") != [ai_response_text]:
+            updated_history.append({"role": "model", "parts": [ai_response_text]})
+        # followup_q is already None by default
+
+    # Final check: ensure ai_response_text is a string (it should be due to initialization)
+    if ai_response_text is None: # Should be impossible now due to initialization
+        ai_response_text = "An unexpected internal error occurred."
+        print("CRITICAL FALLBACK: ai_response_text was None before final return!")
+        if not updated_history or updated_history[-1].get("role") != "model" or updated_history[-1].get("parts") != [ai_response_text]:
             updated_history.append({"role": "model", "parts": [ai_response_text]})
 
     return ai_response_text, updated_history, follow_up_question_for_user

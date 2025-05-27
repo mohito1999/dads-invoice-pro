@@ -60,6 +60,28 @@ update_customer_func = types.FunctionDeclaration(
     )
 )
 
+get_customers_for_organization_func = types.FunctionDeclaration(
+    name="get_customers_for_organization",
+    description="Lists all customers associated with the current active organization. Can be used to see a list of existing customers or to find a customer if the user is unsure of the exact name.",
+    parameters=types.Schema( # This tool currently takes no specific parameters from the LLM, org_id is implicit
+        type='OBJECT',
+        properties={}, # No specific parameters needed from LLM beyond implicit org context
+        required=[]
+    )
+)
+
+delete_customer_func = types.FunctionDeclaration(
+    name="delete_customer_func",
+    description="Deletes an existing customer from the system using their unique customer ID. This action is permanent and will also delete associated invoices. The customer_id MUST be provided.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "customer_id": types.Schema(type='STRING', description="The unique UUID of the customer to delete. This must be a valid ID obtained from a previous step.")
+        },
+        required=["customer_id"]
+    )
+)
+
 
 # --- Tool: Get Item by Name ---
 get_item_by_name_func = types.FunctionDeclaration(
@@ -350,6 +372,8 @@ dad_invoice_pro_tool = types.Tool(
         get_customer_by_name_func,
         create_customer_func,
         update_customer_func,
+        get_customers_for_organization_func, # New
+        delete_customer_func,                # New
         get_item_by_name_func,      # We had this
         get_items_for_organization_func,
         get_item_details_by_id_func, # New
