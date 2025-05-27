@@ -25,17 +25,6 @@ app = FastAPI(
 )
 
 
-# --- ADD THIS DEBUGGING MIDDLEWARE ---
-@app.middleware("http")
-async def debug_request_path_middleware(request: Request, call_next):
-    print(f"DEBUG MIDDLEWARE: Path: {request.url.path}, Method: {request.method}, Full URL: {request.url}")
-    print(f"DEBUG MIDDLEWARE: Scope Path: {request.scope.get('path')}")
-    print(f"DEBUG MIDDLEWARE: Scope Raw Path: {request.scope.get('raw_path')}") # if available
-    print(f"DEBUG MIDDLEWARE: Scope Root Path: {request.scope.get('root_path')}")
-    response = await call_next(request)
-    return response
-# --- END DEBUGGING MIDDLEWARE ---
-
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
