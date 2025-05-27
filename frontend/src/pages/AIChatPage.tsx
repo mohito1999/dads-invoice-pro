@@ -2,153 +2,239 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area"; // You might need to add this: npx shadcn-ui@latest add scroll-area
-import apiClient from '@/services/apiClient'; // Your API client
-import { useAuth } from '@/contexts/AuthContext'; // To ensure user is authenticated
-import { SendHorizonalIcon } from 'lucide-react'; // Icon for send button
-import { toast } from 'sonner'; // For error notifications
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import apiClient from '@/services/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
+import { SendHorizonalIcon, BotIcon, UserIcon, AlertCircleIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/ui/card';
 
+interface ChatMessagePart {
+    text?: string;
+    name?: string; 
+    args?: Record<string, any>;
+    response?: Record<string, any>;
+}
 interface ChatMessage {
-    role: 'user' | 'model' | 'function_call_request' | 'function_call_response' | 'system_error'; // Match your history structure
-    parts: any[]; // For simplicity, 'any[]'. Could be string[] or more specific later.
+    role: 'user' | 'model' | 'function_call_request' | 'function_call_response' | 'system_error';
+    parts: ChatMessagePart[] | string[]; 
 }
 
 const AIChatPage = () => {
-    const { token } = useAuth(); // Get token for API calls
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const { token } = useAuth();
+    const [messages, setMessages] = useState<ChatMessage[]>([]); // Initialize with empty messages
     const [currentMessage, setCurrentMessage] = useState('');
     const [isLoadingAI, setIsLoadingAI] = useState(false);
-    const scrollAreaRef = useRef<HTMLDivElement>(null); // For auto-scrolling
+    
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll to bottom when new messages are added
+    // REMOVED: useEffect that set the initial AI welcome message into `messages` state.
+
+    // Auto-scroll to bottom
     useEffect(() => {
-        if (scrollAreaRef.current) {
-            const scrollViewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
-            if (scrollViewport) {
-                scrollViewport.scrollTop = scrollViewport.scrollHeight;
-            }
-        }
-    }, [messages]);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages, isLoadingAI]);
 
     const handleSendMessage = async (e?: React.FormEvent<HTMLFormElement>) => {
         if (e) e.preventDefault();
         if (!currentMessage.trim() || isLoadingAI) return;
 
-        const userMessage: ChatMessage = { role: 'user', parts: [currentMessage.trim()] };
+        const userTypedMessage = currentMessage.trim();
+        const userMessageForState: ChatMessage = { role: 'user', parts: [{text: userTypedMessage}] };
         
-        // Add user message to local state immediately for responsiveness
-        const newMessagesWithUser = [...messages, userMessage];
-        setMessages(newMessagesWithUser);
-        const messageToSendToAPI = currentMessage.trim();
+        // Add user's message to the *current* set of messages for UI update
+        // The history sent to API will be based on the state *before* this new user message
+        const historyForAPI = [...messages]; // Capture current messages as history
+        setMessages(prevMessages => [...prevMessages, userMessageForState]); // Update UI
+
         setCurrentMessage('');
         setIsLoadingAI(true);
 
         try {
-            // Prepare history to send (all messages *before* the current user message)
-            const historyForAPI = messages; // Send the state *before* adding the current user's message
-
             const response = await apiClient.post('/chat/', {
-                message: messageToSendToAPI,
-                history: historyForAPI, // Send history up to the point *before* this user message
-            }
-            // No explicit token needed here if apiClient interceptor handles it
-            );
+                message: userTypedMessage,
+                history: historyForAPI, // Send the captured history
+            });
 
-            const { reply, history: updatedHistoryFromServer, follow_up_question } = response.data;
-            
-            // The backend now returns the *complete* updated history.
-            // We can just set our messages state to this.
+            const { history: updatedHistoryFromServer } = response.data;
+            // The server returns the full history including the latest user message and AI response(s)
             setMessages(updatedHistoryFromServer);
-
-            if (follow_up_question) {
-                // Optionally display this in a different way or just let it be the AI's reply
-                console.log("AI has a follow-up question:", follow_up_question);
-            }
 
         } catch (error: any) {
             console.error("Error sending message to AI:", error);
-            const errorMessage = error.response?.data?.detail || "Failed to get response from AI.";
+            const errorMessage = error.response?.data?.detail || "Failed to get response from AI. Please try again.";
             toast.error(errorMessage);
-            // Add an error message to the chat display
-            setMessages(prevMessages => [...prevMessages, {role: 'system_error', parts: [errorMessage]}]);
+            // Add error to UI, it will be part of the `messages` state
+            setMessages(prevMessages => [...prevMessages, {role: 'system_error', parts: [{text: errorMessage}]}]);
         } finally {
             setIsLoadingAI(false);
         }
     };
     
-    // Helper to render message parts (assuming parts are strings for now)
-    const renderMessagePart = (part: any, index: number) => {
-        if (typeof part === 'string') {
-            return <span key={index}>{part}</span>;
+    const renderMessageContent = (msg: ChatMessage, msgIndex: number) => {
+        if (msg.role === 'user' || msg.role === 'model' || msg.role === 'system_error') {
+            const partsToRender = Array.isArray(msg.parts) 
+                ? msg.parts.map(part => typeof part === 'string' ? { text: part } : part) 
+                : [{ text: '' }]; 
+
+            return partsToRender.map((part, partIndex) => {
+                const partContent = part.text || '';
+                return partContent.split('\n').map((line, lineIdx) => (
+                    <React.Fragment key={`${msgIndex}-${partIndex}-${lineIdx}`}>
+                        {line}
+                        {lineIdx < partContent.split('\n').length - 1 && <br />}
+                    </React.Fragment>
+                ));
+            });
         }
-        if (typeof part === 'object' && part !== null) {
-            if (part.text) return <span key={index}>{part.text}</span>;
-            if (part.name && part.args) { // function_call_request
-                return <pre key={index} className="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded-md overflow-x-auto">Tool Call Request: {part.name}({JSON.stringify(part.args, null, 2)})</pre>;
-            }
-            if (part.name && part.response) { // function_call_response
-                 return <pre key={index} className="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded-md overflow-x-auto">Tool Result ({part.name}): {JSON.stringify(part.response, null, 2)}</pre>;
-            }
-        }
-        return <span key={index}>{JSON.stringify(part)}</span>; // Fallback
+        return null;
     };
 
-
     if (!token) {
-        return <div className="p-4 text-center">Please log in to use the AI Chat.</div>;
+        return (
+            <div className="container mx-auto max-w-screen-lg px-4 py-8 text-center">
+                <AlertCircleIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-xl text-muted-foreground">Please log in to use the AI Chat Assistant.</p>
+            </div>
+        );
     }
 
+    const aiWelcomeMessage = `Hello! I'm ProVoice AI, your expert assistant for ProVoice. I'm here to help you manage your invoicing tasks. How can I assist you today?`;
+
     return (
-        <div className="flex flex-col h-[calc(100vh-120px)] max-w-3xl mx-auto border rounded-lg shadow-sm"> {/* Adjust height as needed */}
-            <div className="p-4 border-b">
-                <h2 className="text-xl font-semibold">ProVoice AI Assistant</h2>
+        <div className="container mx-auto max-w-screen-lg px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+            {/* Page Header */}
+            <div className="flex flex-col items-start gap-1">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+                    <BotIcon className="mr-3 h-8 w-8 text-primary shrink-0" />
+                    ProVoice AI Assistant
+                </h1>
+                <p className="text-muted-foreground">
+                    Chat with your AI assistant to manage customers, items, and invoices.
+                </p>
             </div>
 
-            <ScrollArea className="flex-grow p-4 space-y-4" ref={scrollAreaRef}>
-                {messages.map((msg, index) => (
-                    <div
-                        key={index}
-                        className={`flex ${
-                            msg.role === 'user' ? 'justify-end' : 'justify-start'
-                        }`}
-                    >
-                        <div
-                            className={`max-w-[70%] p-3 rounded-lg shadow ${
-                                msg.role === 'user'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : msg.role === 'system_error'
-                                    ? 'bg-destructive text-destructive-foreground'
-                                    : 'bg-muted' 
-                            }`}
-                        >
-                           {msg.parts.map((part, partIndex) => renderMessagePart(part, partIndex))}
-                        </div>
-                    </div>
-                ))}
-                {isLoadingAI && (
-                     <div className="flex justify-start">
-                        <div className="max-w-[70%] p-3 rounded-lg shadow bg-muted">
-                            <span className="italic text-gray-500">AI is thinking...</span>
-                        </div>
-                    </div>
-                )}
-            </ScrollArea>
+            {/* Chat Area Card */}
+            <Card className="w-full flex flex-col shadow-xl h-[calc(100vh-18rem)]">
+                <CardContent className="p-0 flex-grow flex flex-col">
+                    <ScrollArea className="flex-grow h-0">
+                        <div className="p-4 sm:p-6 space-y-4">
+                            {/* Static Welcome Message - UI Only */}
+                            <div
+                                className={cn(
+                                    "flex items-end gap-2.5 justify-start mr-auto"
+                                )}
+                            >
+                                <div className="flex-shrink-0 bg-primary text-primary-foreground rounded-full h-9 w-9 flex items-center justify-center shadow">
+                                    <BotIcon className="h-5 w-5" />
+                                </div>
+                                <div
+                                    className={cn(
+                                        "max-w-[75%] sm:max-w-[70%] p-3 px-4 rounded-2xl shadow-md text-sm sm:text-base leading-relaxed break-words", 
+                                        'bg-muted dark:bg-slate-800 rounded-bl-md'
+                                    )}
+                                >
+                                {aiWelcomeMessage.split('\n').map((line, lineIdx) => (
+                                    <React.Fragment key={`welcome-${lineIdx}`}>
+                                        {line}
+                                        {lineIdx < aiWelcomeMessage.split('\n').length - 1 && <br />}
+                                    </React.Fragment>
+                                ))}
+                                </div>
+                            </div>
 
-            <div className="p-4 border-t">
-                <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-                    <Input
-                        type="text"
-                        placeholder="Ask ProVoice AI anything about your invoices..."
-                        value={currentMessage}
-                        onChange={(e) => setCurrentMessage(e.target.value)}
-                        disabled={isLoadingAI}
-                        className="flex-grow"
-                    />
-                    <Button type="submit" disabled={isLoadingAI || !currentMessage.trim()} size="icon">
-                        <SendHorizonalIcon className="h-5 w-5" />
-                    </Button>
-                </form>
-            </div>
+                            {/* Dynamically rendered messages from state */}
+                            {messages.map((msg, index) => {
+                                if (msg.role !== 'user' && msg.role !== 'model' && msg.role !== 'system_error') {
+                                    return null; 
+                                }
+                                const isUser = msg.role === 'user';
+                                const isError = msg.role === 'system_error';
+                                return (
+                                    <div
+                                        key={index}
+                                        className={cn(
+                                            "flex items-end gap-2.5 animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out",
+                                            isUser ? 'justify-end ml-auto' : 'justify-start mr-auto'
+                                        )}
+                                    >
+                                        {!isUser && !isError && (
+                                            <div className="flex-shrink-0 bg-primary text-primary-foreground rounded-full h-9 w-9 flex items-center justify-center shadow">
+                                                <BotIcon className="h-5 w-5" />
+                                            </div>
+                                        )}
+                                        {!isUser && isError && (
+                                            <div className="flex-shrink-0 bg-destructive text-destructive-foreground rounded-full h-9 w-9 flex items-center justify-center shadow">
+                                                <AlertCircleIcon className="h-5 w-5" />
+                                            </div>
+                                        )}
+                                        <div
+                                            className={cn(
+                                                "max-w-[75%] sm:max-w-[70%] p-3 px-4 rounded-2xl shadow-md text-sm sm:text-base leading-relaxed break-words", 
+                                                isUser 
+                                                    ? 'bg-primary text-primary-foreground rounded-br-md'
+                                                    : isError 
+                                                    ? 'bg-destructive/10 text-destructive-foreground border border-destructive/20 rounded-bl-md' 
+                                                    : 'bg-muted dark:bg-slate-800 rounded-bl-md'
+                                            )}
+                                        >
+                                        {renderMessageContent(msg, index)}
+                                        </div>
+                                        {isUser && (
+                                            <div className="flex-shrink-0 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full h-9 w-9 flex items-center justify-center shadow">
+                                                <UserIcon className="h-5 w-5" />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {isLoadingAI && (
+                                <div className="flex items-end gap-2.5 justify-start mr-auto">
+                                    <div className="flex-shrink-0 bg-primary text-primary-foreground rounded-full h-9 w-9 flex items-center justify-center shadow">
+                                        <BotIcon className="h-5 w-5" />
+                                    </div>
+                                    <div className="max-w-[70%] p-3 px-4 rounded-2xl shadow-md bg-muted dark:bg-slate-800 rounded-bl-md">
+                                        <div className="flex items-center space-x-1.5 py-1.5">
+                                            <span className="h-2.5 w-2.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                            <span className="h-2.5 w-2.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                            <span className="h-2.5 w-2.5 bg-slate-400 rounded-full animate-bounce"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} className="h-1"></div>
+                        </div>
+                        <ScrollBar orientation="vertical" />
+                    </ScrollArea>
+
+                    <div className="p-3 sm:p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                        <form onSubmit={handleSendMessage} className="flex items-center gap-2 sm:gap-3">
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary shrink-0" onClick={() => setMessages([])} title="Clear Chat">
+                                <MessageSquarePlusIcon className="h-5 w-5"/>
+                            </Button>
+                            <Input
+                                type="text"
+                                placeholder="Chat with ProVoice AI..."
+                                value={currentMessage}
+                                onChange={(e) => setCurrentMessage(e.target.value)}
+                                disabled={isLoadingAI}
+                                className="flex-grow h-11 text-base px-4"
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey && !isLoadingAI && currentMessage.trim()) {
+                                        e.preventDefault(); 
+                                        handleSendMessage();
+                                    }
+                                }}
+                            />
+                            <Button type="submit" disabled={isLoadingAI || !currentMessage.trim()} size="lg" className="h-11 px-5 text-base">
+                                <SendHorizonalIcon className="h-5 w-5 mr-0 sm:mr-2" />
+                                <span className="hidden sm:inline">Send</span>
+                            </Button>
+                        </form>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 };

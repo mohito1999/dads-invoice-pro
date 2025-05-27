@@ -21,7 +21,7 @@ async def get_customer_by_company_name_for_org(
     """
     result = await db.execute(
         select(CustomerModel)
-        .filter(CustomerModel.company_name == company_name)
+        .filter(CustomerModel.company_name.ilike(company_name))
         .filter(CustomerModel.organization_id == organization_id)
     )
     return result.scalars().first()

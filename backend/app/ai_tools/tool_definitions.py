@@ -90,6 +90,71 @@ create_item_func = types.FunctionDeclaration(
     )
 )
 
+get_items_for_organization_func = types.FunctionDeclaration(
+    name="get_items_for_organization",
+    description="Lists all items for the current active organization. Can be used to see available items before adding to an invoice or if the user asks to see their items. Supports optional search by item name.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "search_term": types.Schema(type='STRING', description="Optional: A term to search for within item names.")
+        },
+        required=[]
+    )
+)
+
+get_item_details_by_id_func = types.FunctionDeclaration(
+    name="get_item_details_by_id",
+    description="Retrieves detailed information for a specific item using its unique item ID. Use this if you have an item_id (e.g., from a previous search or creation) and need its full details, including description, price, unit, and any associated image information.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "item_id": types.Schema(type='STRING', description="The unique UUID of the item to retrieve.")
+        },
+        required=["item_id"]
+    )
+)
+
+get_item_details_func = types.FunctionDeclaration( # Already had get_item_by_name, this is if by ID
+    name="get_item_details_by_id",
+    description="Retrieves detailed information for a specific item using its unique ID. Use this if you have an item_id and need full details.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "item_id": types.Schema(type='STRING', description="The UUID of the item to retrieve.")
+        },
+        required=["item_id"]
+    )
+)
+
+update_item_func = types.FunctionDeclaration(
+    name="update_item_func",
+    description="Updates an existing item's details. You MUST provide the item_id. Only include fields that need to be changed. Images are handled separately.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "item_id": types.Schema(type='STRING', description="The UUID of the item to update. Mandatory."),
+            "name": types.Schema(type='STRING', description="The new name for the item. Optional."),
+            "description": types.Schema(type='STRING', description="New description. Optional."),
+            "default_price": types.Schema(type='NUMBER', description="New default price. Optional."),
+            "default_unit": types.Schema(type='STRING', description="New default unit. Optional.")
+        },
+        required=["item_id"]
+    )
+)
+
+delete_item_func = types.FunctionDeclaration(
+    name="delete_item_func",
+    description="Deletes an existing item from the system using its unique ID. This action is permanent.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "item_id": types.Schema(type='STRING', description="The UUID of the item to delete.")
+        },
+        required=["item_id"]
+    )
+)
+
+
 # --- Tool: Create Invoice ---
 create_invoice_func = types.FunctionDeclaration(
     name="create_invoice_func",
@@ -137,6 +202,134 @@ create_invoice_func = types.FunctionDeclaration(
     )
 )
 
+get_invoices_for_user_func = types.FunctionDeclaration(
+    name="get_invoices_for_user",
+    description="Lists invoices for the current user and active organization. Supports filtering by status, customer, date range, and invoice number search.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "customer_id": types.Schema(type='STRING', description="Optional: UUID of a customer to filter invoices for."),
+            "status": types.Schema(type='STRING', description="Optional: Filter by invoice status (e.g., DRAFT, UNPAID, PAID, PARTIALLY_PAID, OVERDUE, CANCELLED)."),
+            "invoice_number_search": types.Schema(type='STRING', description="Optional: Search term for invoice numbers."),
+            "date_from": types.Schema(type='STRING', description="Optional: Start date (YYYY-MM-DD) to filter invoices from."),
+            "date_to": types.Schema(type='STRING', description="Optional: End date (YYYY-MM-DD) to filter invoices to.")
+        },
+        required=[]
+    )
+)
+
+get_invoice_details_by_id_func = types.FunctionDeclaration(
+    name="get_invoice_details_by_id",
+    description="Retrieves all details for a specific invoice using its unique ID.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "invoice_id": types.Schema(type='STRING', description="The UUID of the invoice to retrieve.")
+        },
+        required=["invoice_id"]
+    )
+)
+
+update_invoice_func = types.FunctionDeclaration(
+    name="update_invoice_func",
+    description="Updates an existing invoice. You MUST provide the invoice_id. Only include fields that need to be changed. Line items can be fully replaced if provided.",
+    parameters=types.Schema( # This is a simplified version, a full update is complex for LLM to construct
+        type='OBJECT',
+        properties={
+            "invoice_id": types.Schema(type='STRING', description="The UUID of the invoice to update. Mandatory."),
+            "invoice_number": types.Schema(type='STRING', description="Optional: New invoice number."),
+            "invoice_date": types.Schema(type='STRING', description="Optional: New invoice date (YYYY-MM-DD)."),
+            "due_date": types.Schema(type='STRING', description="Optional: New due date (YYYY-MM-DD)."),
+            "customer_id": types.Schema(type='STRING', description="Optional: New customer UUID for the invoice."),
+            "status": types.Schema(type='STRING', description="Optional: New status (e.g., DRAFT, UNPAID, PAID)."),
+            "comments_notes": types.Schema(type='STRING', description="Optional: New comments or notes."),
+            # Add other updatable header fields like tax_percentage, discount_percentage, shipping fields
+            # Line items update is complex: either replace all or have add/remove/update line item tools.
+            # For now, let's assume LLM could provide a new list of line_items to replace existing.
+            "line_items": types.Schema(
+                type='ARRAY',
+                description="Optional: A new list of line items to completely replace the existing ones. Each item requires description, quantity, price.",
+                items=types.Schema(type='OBJECT', properties={ # Same as create_invoice_func line_items
+                    "item_id": types.Schema(type='STRING', description="Optional UUID..."),
+                    "item_description": types.Schema(type='STRING', description="Description... Mandatory."),
+                    "quantity_units": types.Schema(type='NUMBER', description="Quantity in units..."),
+                    "price": types.Schema(type='NUMBER', description="Price... Mandatory."),
+                    # ... other line item fields
+                })
+            )
+        },
+        required=["invoice_id"]
+    )
+)
+
+delete_invoice_func = types.FunctionDeclaration(
+    name="delete_invoice_func",
+    description="Deletes an existing invoice from the system using its unique ID. This action is permanent.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "invoice_id": types.Schema(type='STRING', description="The UUID of the invoice to delete.")
+        },
+        required=["invoice_id"]
+    )
+)
+
+# For PDF download, the AI signals the intent, frontend handles the actual download.
+signal_download_invoice_pdf_func = types.FunctionDeclaration(
+    name="signal_download_invoice_pdf",
+    description="Signals that the user wants to download the PDF for a specific invoice. The system will then provide a way for the user to download it.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "invoice_id": types.Schema(type='STRING', description="The UUID of the invoice whose PDF is to be downloaded.")
+        },
+        required=["invoice_id"]
+    )
+)
+
+transform_invoice_to_commercial_func = types.FunctionDeclaration(
+    name="transform_invoice_to_commercial_func",
+    description="Transforms an existing Pro Forma invoice into a new Commercial invoice. You need the Pro Forma invoice ID.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "pro_forma_invoice_id": types.Schema(type='STRING', description="The UUID of the Pro Forma invoice to transform."),
+            "new_invoice_number": types.Schema(type='STRING', description="Optional: A specific invoice number for the new Commercial invoice.")
+        },
+        required=["pro_forma_invoice_id"]
+    )
+)
+
+generate_packing_list_func = types.FunctionDeclaration(
+    name="generate_packing_list_func",
+    description="Generates a new Packing List from an existing Commercial invoice. You need the Commercial invoice ID.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "commercial_invoice_id": types.Schema(type='STRING', description="The UUID of the Commercial invoice to use as a base."),
+            "new_packing_list_number": types.Schema(type='STRING', description="Optional: A specific number for the new Packing List.")
+        },
+        required=["commercial_invoice_id"]
+    )
+)
+
+record_payment_func = types.FunctionDeclaration(
+    name="record_payment_func",
+    description="Records a payment made against a specific invoice. Requires invoice ID, amount paid, and payment date.",
+    parameters=types.Schema(
+        type='OBJECT',
+        properties={
+            "invoice_id": types.Schema(type='STRING', description="The UUID of the invoice to record payment for."),
+            "amount_paid_now": types.Schema(type='NUMBER', description="The amount being paid in this transaction."),
+            "payment_date": types.Schema(type='STRING', description="Date payment was received (YYYY-MM-DD). Defaults to today if not specified."),
+            "payment_method": types.Schema(type='STRING', description="Optional: Method of payment (e.g., Bank Transfer, Cash)."),
+            "notes": types.Schema(type='STRING', description="Optional: Notes for this payment transaction.")
+        },
+        required=["invoice_id", "amount_paid_now"]
+    )
+)
+
+
 # --- Tool: Ask Clarifying Question ---
 ask_clarifying_question_func = types.FunctionDeclaration(
     name="ask_clarifying_question",
@@ -157,10 +350,22 @@ dad_invoice_pro_tool = types.Tool(
         get_customer_by_name_func,
         create_customer_func,
         update_customer_func,
-        get_item_by_name_func,
-        create_item_func,
-        create_invoice_func,
-        ask_clarifying_question_func,
+        get_item_by_name_func,      # We had this
+        get_items_for_organization_func,
+        get_item_details_by_id_func, # New
+        create_item_func,           # We had this
+        update_item_func,           # New
+        delete_item_func,           # New
+        create_invoice_func,        # We had this
+        get_invoices_for_user_func, # New
+        get_invoice_details_by_id_func, # New
+        update_invoice_func,        # New
+        delete_invoice_func,        # New
+        signal_download_invoice_pdf_func, # New
+        transform_invoice_to_commercial_func, # New
+        generate_packing_list_func, # New
+        record_payment_func,        # New
+        ask_clarifying_question_func 
     ]
 )
 
