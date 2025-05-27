@@ -9,6 +9,8 @@ from app.api.endpoints import items
 from app.api.endpoints import invoices
 from app.api.endpoints import dashboard
 from app.api.endpoints import invoice_templates
+from app.api.endpoints import chat
+
 api_router = APIRouter()
 
 # Include other routers here
@@ -20,6 +22,7 @@ api_router.include_router(items.router, prefix="/items", tags=["Items"])
 api_router.include_router(invoices.router, prefix="/invoices", tags=["Invoices"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 api_router.include_router(invoice_templates.router, prefix="/invoice-templates", tags=["Invoice Templates"])
+api_router.include_router(chat.router, prefix="/chat", tags=["AI Chat"])
 @api_router.get("/test", tags=["Test"]) # This was our initial test endpoint
 async def test_endpoint():
     return {"message": "API router is working!"}

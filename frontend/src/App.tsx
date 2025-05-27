@@ -10,6 +10,7 @@ import CustomersPage from "./pages/CustomersPage";
 import ItemsPage from "./pages/ItemsPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceEditorPage from "./pages/InvoiceEditorPage";
+import AIChatPage from "./pages/AIChatPage";
 import { useAuth } from "./contexts/AuthContext"; // Import useAuth
 
 // Updated ProtectedRoute to use AuthContext
@@ -55,6 +56,7 @@ function App() {
           <Route path="invoices/new" element={<InvoiceEditorPage />} />
           <Route path="invoices/edit/:invoiceId" element={<InvoiceEditorPage />} />
           <Route path="invoices/view/:invoiceId" element={<InvoiceEditorPage />} /> 
+          <Route path="ai-chat" element={<AIChatPage />} />
         </Route>
 
         <Route path="/login" element={<LoginPage />} />
