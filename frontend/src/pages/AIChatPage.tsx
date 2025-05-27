@@ -9,6 +9,8 @@ import { SendHorizonalIcon, BotIcon, UserIcon, AlertCircleIcon, MessageSquarePlu
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
+import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
+import remarkGfm from 'remark-gfm'; // Import remark-gfm for full markdown support
 
 interface ChatMessagePart {
     text?: string;
@@ -21,17 +23,38 @@ interface ChatMessage {
     parts: ChatMessagePart[] | string[]; 
 }
 
+// Custom components for ReactMarkdown to apply Tailwind classes
+const markdownComponents = {
+    p: ({node, ...props}: any) => <p className="mb-1 last:mb-0" {...props} />,
+    strong: ({node, ...props}: any) => <strong className="font-semibold" {...props} />,
+    em: ({node, ...props}: any) => <em className="italic" {...props} />,
+    a: ({node, ...props}: any) => <a className="text-primary hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+    ul: ({node, ...props}: any) => <ul className="list-disc list-inside my-1 space-y-0.5 pl-2" {...props} />,
+    ol: ({node, ...props}: any) => <ol className="list-decimal list-inside my-1 space-y-0.5 pl-2" {...props} />,
+    li: ({node, ...props}: any) => <li className="ml-2" {...props} />,
+    code: ({node, inline, className, children, ...props}: any) => {
+        const match = /language-(\w+)/.exec(className || '')
+        return !inline && match ? (
+        <pre className="bg-slate-100 dark:bg-slate-900 p-2 rounded-md overflow-x-auto my-2 text-sm" {...props}>
+            <code>{children}</code>
+        </pre>
+        ) : (
+        <code className="bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-sm" {...props}>
+            {children}
+        </code>
+        )
+    },
+};
+
+
 const AIChatPage = () => {
     const { token } = useAuth();
-    const [messages, setMessages] = useState<ChatMessage[]>([]); // Initialize with empty messages
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMessage, setCurrentMessage] = useState('');
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // REMOVED: useEffect that set the initial AI welcome message into `messages` state.
-
-    // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoadingAI]);
@@ -43,10 +66,8 @@ const AIChatPage = () => {
         const userTypedMessage = currentMessage.trim();
         const userMessageForState: ChatMessage = { role: 'user', parts: [{text: userTypedMessage}] };
         
-        // Add user's message to the *current* set of messages for UI update
-        // The history sent to API will be based on the state *before* this new user message
-        const historyForAPI = [...messages]; // Capture current messages as history
-        setMessages(prevMessages => [...prevMessages, userMessageForState]); // Update UI
+        const historyForAPI = [...messages]; 
+        setMessages(prevMessages => [...prevMessages, userMessageForState]); 
 
         setCurrentMessage('');
         setIsLoadingAI(true);
@@ -54,18 +75,16 @@ const AIChatPage = () => {
         try {
             const response = await apiClient.post('/chat/', {
                 message: userTypedMessage,
-                history: historyForAPI, // Send the captured history
+                history: historyForAPI, 
             });
 
             const { history: updatedHistoryFromServer } = response.data;
-            // The server returns the full history including the latest user message and AI response(s)
             setMessages(updatedHistoryFromServer);
 
         } catch (error: any) {
             console.error("Error sending message to AI:", error);
             const errorMessage = error.response?.data?.detail || "Failed to get response from AI. Please try again.";
             toast.error(errorMessage);
-            // Add error to UI, it will be part of the `messages` state
             setMessages(prevMessages => [...prevMessages, {role: 'system_error', parts: [{text: errorMessage}]}]);
         } finally {
             setIsLoadingAI(false);
@@ -80,12 +99,15 @@ const AIChatPage = () => {
 
             return partsToRender.map((part, partIndex) => {
                 const partContent = part.text || '';
-                return partContent.split('\n').map((line, lineIdx) => (
-                    <React.Fragment key={`${msgIndex}-${partIndex}-${lineIdx}`}>
-                        {line}
-                        {lineIdx < partContent.split('\n').length - 1 && <br />}
-                    </React.Fragment>
-                ));
+                return (
+                    <ReactMarkdown
+                        key={`${msgIndex}-${partIndex}`}
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                    >
+                        {partContent}
+                    </ReactMarkdown>
+                );
             });
         }
         return null;
@@ -135,12 +157,9 @@ const AIChatPage = () => {
                                         'bg-muted dark:bg-slate-800 rounded-bl-md'
                                     )}
                                 >
-                                {aiWelcomeMessage.split('\n').map((line, lineIdx) => (
-                                    <React.Fragment key={`welcome-${lineIdx}`}>
-                                        {line}
-                                        {lineIdx < aiWelcomeMessage.split('\n').length - 1 && <br />}
-                                    </React.Fragment>
-                                ))}
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                        {aiWelcomeMessage}
+                                    </ReactMarkdown>
                                 </div>
                             </div>
 
