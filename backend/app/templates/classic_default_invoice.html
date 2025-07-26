@@ -29,7 +29,7 @@
             @top-left {
                 {% set header_title = "DOCUMENT" %}
                 {% if invoice.invoice_type.value == "PRO_FORMA" %}
-                    {% set header_title = "Pro Forma Invoice - Stock Ready Goods" %}
+                    {% set header_title = "Pro Forma Invoice" %}
                 {% elif invoice.invoice_type.value == "COMMERCIAL" %}
                     {% set header_title = "Commercial Invoice" %}
                 {% elif invoice.invoice_type.value == "PACKING_LIST" %}
