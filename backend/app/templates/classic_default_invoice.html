@@ -29,7 +29,7 @@
             @top-left {
                 {% set header_title = "DOCUMENT" %}
                 {% if invoice.invoice_type.value == "PRO_FORMA" %}
-                    {% set header_title = "Pro Forma Invoice" %}
+                    {% set header_title = "Pro Forma Invoice - Stock Ready Goods" %}
                 {% elif invoice.invoice_type.value == "COMMERCIAL" %}
                     {% set header_title = "Commercial Invoice" %}
                 {% elif invoice.invoice_type.value == "PACKING_LIST" %}
@@ -260,8 +260,8 @@
                 <tr>
                     <td class="text-center">{{ loop.index }}</td>
                     <td class="description-cell">
-                        {{ item_line.item_description }}
-                        {% if item_line.item_specific_comments %}<br><small><em>{{ item_line.item_specific_comments }}</em></small>{% endif %}
+                        {{ item_line.item_description | replace('\n', '<br>') | safe }}
+                        {% if item_line.item_specific_comments %}<br><small><em>{{ item_line.item_specific_comments | replace('\n', '<br>') | safe }}</em></small>{% endif %}
                     </td>
                     <td class="text-center">{{ "%.0f"|format(item_line.quantity_units) if item_line.quantity_units is not none else '-' }}</td>
                     <td class="text-center">{{ "%.0f"|format(item_line.quantity_cartons) if item_line.quantity_cartons is not none else '-' }}</td>
