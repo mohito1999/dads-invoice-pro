@@ -195,7 +195,7 @@
         </div>
 
         <div class="document-details-bar">
-            <div class="document-number"><strong>Packing List #:</strong> {{ invoice.invoice_number }}</div>
+            <div class="document-number"><strong>Invoice #:</strong> {{ invoice.invoice_number }}</div>
             <div class="document-date"><strong>Date:</strong> {{ invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '' }}</div>
             <div class="document-ref">
                 {# Optional: {% if invoice.ref_commercial_invoice_no %}<strong>Ref. Invoice:</strong> {{ invoice.ref_commercial_invoice_no }} {% endif %} #}

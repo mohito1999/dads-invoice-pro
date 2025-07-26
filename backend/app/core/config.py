@@ -38,8 +38,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     # Access token expiration time in minutes
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days for convenience, adjust as needed
-
     # --- END NEW SECURITY SETTINGS ---
+
+    # --- NEW: Gemini Settings ---
+    GOOGLE_GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL_NAME: str = "gemini-2.5-flash-preview-05-20" # Or your preferred model
+    # --- END NEW: Gemini Settings ---
 
     model_config = SettingsConfigDict(
         # Corrected path: four .parent calls to get to project root
@@ -62,5 +66,10 @@ if settings.POSTGRES_USER and settings.POSTGRES_PASSWORD and \
     )
 else:
     print("Database URL could not be constructed. Check POSTGRES environment variables in .env and config defaults.")
+
+
+# --- NEW: Validate Gemini API Key ---
+if not settings.GOOGLE_GEMINI_API_KEY:
+    print("WARNING: GOOGLE_GEMINI_API_KEY is not set. AI features will not work.")
 
 

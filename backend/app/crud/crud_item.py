@@ -36,7 +36,7 @@ async def get_item_by_name_for_org(
     """
     result = await db.execute(
         select(ItemModel)
-        .filter(ItemModel.name == name)
+        .filter(ItemModel.name.ilike(name))
         .filter(ItemModel.organization_id == organization_id)
     )
     return result.scalars().first()

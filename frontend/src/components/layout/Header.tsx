@@ -13,7 +13,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { 
-    Building, ChevronsUpDown, PlusCircle, UserCircle, LogOut, Settings, Menu as MenuIcon, Trash2Icon // <<< ADD Trash2Icon
+    Building, ChevronsUpDown, PlusCircle, UserCircle, LogOut, Settings, Menu as MenuIcon, Trash2Icon, BotIcon // <<< ADD Trash2Icon
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrg } from "@/contexts/OrgContext";
@@ -128,6 +128,14 @@ const Header = () => {
                  >
                      Invoices
                  </Link>
+                 <Link 
+                      to="/ai-chat" 
+                      className={isMobile ? "block py-2 text-lg hover:bg-muted rounded-md px-2" : "text-muted-foreground transition-colors hover:text-foreground"}
+                      onClick={() => isMobile && setIsMobileMenuOpen(false)}
+                  >
+                      AI Chat
+                  </Link>  
+                 
              </>
          )}
      </>
