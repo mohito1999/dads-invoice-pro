@@ -64,3 +64,6 @@ coverage/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Static files
+/backend/static/
