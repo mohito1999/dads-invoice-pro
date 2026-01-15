@@ -28,33 +28,15 @@ def cleanup():
             except ProcessLookupError:
                 pass # Process already terminated during the grace period
     
-    # Stop docker-compose
-    print("Stopping Docker services...")
-    try:
-        subprocess.run(["docker-compose", "down"], check=True, cwd=project_root)
-        print("Docker services stopped.")
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"Could not stop docker-compose services: {e}")
-
+    # Docker services are no longer managed by this script since we moved to Supabase
 
 atexit.register(cleanup)
 
 
-# --- 1. Start Docker services ---
-print("Starting Docker services in the background...")
-docker_compose_cmd = ["docker-compose", "up", "-d"]
-try:
-    subprocess.run(docker_compose_cmd, check=True, cwd=project_root)
-    print("Docker services started successfully.")
-except subprocess.CalledProcessError as e:
-    print(f"Failed to start Docker services: {e}")
-    exit(1)
-except FileNotFoundError:
-    print("Error: 'docker-compose' command not found. Is Docker installed and in your PATH?")
-    exit(1)
+# --- 1. Start Backend Server --- (Moved up since Docker step is gone)
 
 
-# --- 2. Start Backend Server ---
+# --- 1 (Redux). Start Backend Server ---
 print("\nStarting backend server...")
 backend_dir = os.path.join(project_root, "backend")
 uvicorn_executable = os.path.join(backend_dir, "venv/bin/uvicorn")
@@ -69,7 +51,7 @@ except FileNotFoundError:
     exit(1)
 
 
-# --- 3. Start Frontend Server ---
+# --- 2. Start Frontend Server ---
 print("\nStarting frontend development server...")
 frontend_dir = os.path.join(project_root, "frontend")
 frontend_cmd = ["npm", "run", "dev"]

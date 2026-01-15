@@ -16,8 +16,10 @@ from app.schemas.invoice import (
     InvoiceStatusEnum,
     PricePerTypeEnum, 
     InvoiceItemUpdate,
+    InvoiceItemUpdate,
     InvoiceTypeEnum,
-    PaymentRecordIn
+    PaymentRecordIn,
+    DiscountTypeEnum
 )
 
 # Helper function to calculate a single line item's total
@@ -53,7 +55,9 @@ def calculate_invoice_financials(
     line_items_data: List[InvoiceItemCreate], 
     invoice_currency: str, 
     tax_percentage: Optional[float] = None,
-    discount_percentage: Optional[float] = None
+    discount_percentage: Optional[float] = None,
+    discount_type: DiscountTypeEnum = DiscountTypeEnum.PERCENTAGE,
+    manual_discount_amount: Optional[float] = None
 ) -> Tuple[float, float, float, float]:
     """
     Calculates subtotal, tax, discount, and total for an invoice.
@@ -70,8 +74,12 @@ def calculate_invoice_financials(
         calculated_tax_amount = round(subtotal * (tax_percentage / 100.0), 2)
 
     calculated_discount_amount = 0.0
-    if discount_percentage is not None and discount_percentage > 0:
-        calculated_discount_amount = round(subtotal * (discount_percentage / 100.0), 2)
+    if discount_type == DiscountTypeEnum.PERCENTAGE:
+        if discount_percentage is not None and discount_percentage > 0:
+            calculated_discount_amount = round(subtotal * (discount_percentage / 100.0), 2)
+    elif discount_type == DiscountTypeEnum.FIXED:
+        if manual_discount_amount is not None and manual_discount_amount > 0:
+            calculated_discount_amount = round(manual_discount_amount, 2)
     
     calculated_discount_amount = min(calculated_discount_amount, subtotal) 
 
@@ -126,19 +134,37 @@ async def create_invoice_with_items(
     db: AsyncSession, *, invoice_in: InvoiceCreate, owner_id: uuid.UUID
 ) -> InvoiceModel:
     invoice_data_dict = invoice_in.model_dump(
-        exclude={'line_items', 'subtotal_amount', 'tax_amount', 'discount_amount', 'total_amount', 'pdf_url', 'status'}
+        exclude={'line_items', 'subtotal_amount', 'tax_amount', 'total_amount', 'pdf_url', 'status', 'discount_amount'}
     )
+    # Note: 'discount_amount' from input might be needed if FIXED, so we don't exclude it unless we handle it explicitly.
+    # Actually, model_dump excludes it if we put it in exclude set.
+    # Let's extract manual_discount_amount from invoice_in before dump if needed, or just access it directly.
+    
+    manual_disc_amt = invoice_in.discount_amount
+
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=invoice_in.line_items, 
         invoice_currency=invoice_in.currency,
         tax_percentage=invoice_in.tax_percentage,
-        discount_percentage=invoice_in.discount_percentage
+        discount_percentage=invoice_in.discount_percentage,
+        discount_type=invoice_in.discount_type,
+        manual_discount_amount=manual_disc_amt
     )
     final_status = invoice_in.status 
+    
+    # We excluded discount_amount from dump? logic check:
+    # invoice_in has discount_amount (optional).
+    # If we exclude it, we rely on discount_amt calculated.
+    # If FIXED, calculate_invoice_financials returns manual_disc_amt (capped).
+    # So using discount_amt for DB persistence is correct.
+    
+    # Re-build dict without exclusions that we want to override anyway but keep others
+    # Actually, exclude list in original code had 'discount_amount'. We'll keep it excluded and set it manually.
+    
     db_invoice = InvoiceModel(
         **invoice_data_dict, user_id=owner_id, subtotal_amount=subtotal,
         tax_amount=tax_amt if invoice_in.tax_percentage is not None else (invoice_in.tax_amount or 0.0),
-        discount_amount=discount_amt if invoice_in.discount_percentage is not None else (invoice_in.discount_amount or 0.0),
+        discount_amount=discount_amt, # Use calculated/validated amount
         total_amount=total, status=final_status
     )
     db.add(db_invoice)
@@ -205,12 +231,14 @@ async def update_invoice_with_items(
         line_items_data=line_items_for_calculation, 
         invoice_currency=db_invoice.currency,
         tax_percentage=db_invoice.tax_percentage,
-        discount_percentage=db_invoice.discount_percentage
+        discount_percentage=db_invoice.discount_percentage,
+        discount_type=db_invoice.discount_type,
+        manual_discount_amount=update_data_header.get('discount_amount', db_invoice.discount_amount)
     )
     
     db_invoice.subtotal_amount = subtotal
     db_invoice.tax_amount = tax_amt if db_invoice.tax_percentage is not None else (update_data_header.get('tax_amount', db_invoice.tax_amount))
-    db_invoice.discount_amount = discount_amt if db_invoice.discount_percentage is not None else (update_data_header.get('discount_amount', db_invoice.discount_amount))
+    db_invoice.discount_amount = discount_amt
     db_invoice.total_amount = total
 
     requested_amount_paid = update_data_header.get("amount_paid") 
@@ -284,7 +312,9 @@ async def add_line_item_to_invoice(
             )
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data, invoice_currency=parent_invoice.currency,
-        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage
+        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage,
+        discount_type=parent_invoice.discount_type,
+        manual_discount_amount=parent_invoice.discount_amount
     )
     parent_invoice.subtotal_amount = subtotal
     parent_invoice.tax_amount = tax_amt
@@ -329,7 +359,9 @@ async def update_invoice_line_item(
             )
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data, invoice_currency=parent_invoice.currency,
-        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage
+        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage,
+        discount_type=parent_invoice.discount_type,
+        manual_discount_amount=parent_invoice.discount_amount
     )
     parent_invoice.subtotal_amount = subtotal
     parent_invoice.tax_amount = tax_amt
@@ -364,7 +396,9 @@ async def delete_invoice_line_item(db: AsyncSession, *, db_line_item: InvoiceIte
             )
     subtotal, tax_amt, discount_amt, total = calculate_invoice_financials(
         line_items_data=all_line_items_data, invoice_currency=parent_invoice.currency,
-        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage
+        tax_percentage=parent_invoice.tax_percentage, discount_percentage=parent_invoice.discount_percentage,
+        discount_type=parent_invoice.discount_type,
+        manual_discount_amount=parent_invoice.discount_amount
     )
     parent_invoice.subtotal_amount = subtotal
     parent_invoice.tax_amount = tax_amt
@@ -405,7 +439,9 @@ async def transform_pro_forma_to_commercial(
         due_date=fully_loaded_pro_forma.due_date, invoice_type=InvoiceTypeEnum.COMMERCIAL,
         status=InvoiceStatusEnum.DRAFT, currency=fully_loaded_pro_forma.currency,
         organization_id=fully_loaded_pro_forma.organization_id, customer_id=fully_loaded_pro_forma.customer_id,
+
         tax_percentage=fully_loaded_pro_forma.tax_percentage, discount_percentage=fully_loaded_pro_forma.discount_percentage,
+        discount_type=fully_loaded_pro_forma.discount_type, discount_amount=fully_loaded_pro_forma.discount_amount,
         comments_notes=fully_loaded_pro_forma.comments_notes, 
         container_number=fully_loaded_pro_forma.container_number,
         seal_number=fully_loaded_pro_forma.seal_number,

@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func # For server-side default timestamps
 
 from app.db.base_class import Base
-from app.schemas.invoice import InvoiceTypeEnum, InvoiceStatusEnum, PricePerTypeEnum # Import enums for DB
+from app.schemas.invoice import InvoiceTypeEnum, InvoiceStatusEnum, PricePerTypeEnum, DiscountTypeEnum # Import enums for DB
 
 class Invoice(Base):
     # __tablename__ will be 'invoices'
@@ -24,6 +24,10 @@ class Invoice(Base):
     subtotal_amount = Column(Float, nullable=False, default=0.0)
     tax_percentage = Column(Float, nullable=True) # e.g., 10 for 10%
     tax_amount = Column(Float, nullable=False, default=0.0)
+    tax_percentage = Column(Float, nullable=True) # e.g., 10 for 10%
+    tax_amount = Column(Float, nullable=False, default=0.0)
+    
+    discount_type = Column(Enum(DiscountTypeEnum, name='discount_type_enum', native_enum=True, create_type=False), default=DiscountTypeEnum.PERCENTAGE, nullable=False)
     discount_percentage = Column(Float, nullable=True) # e.g., 5 for 5%
     discount_amount = Column(Float, nullable=False, default=0.0)
     total_amount = Column(Float, nullable=False, default=0.0) # This should be calculated

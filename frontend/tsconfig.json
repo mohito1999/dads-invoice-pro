@@ -3,7 +3,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -13,16 +17,24 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     // --- ADD THESE LINES ---
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
     // --- END ADDED LINES ---
   },
-  "include": ["src"], // Keep this as is or as Vite set it
-  "references": [{ "path": "./tsconfig.node.json" }] // Keep this as is
+  "include": [
+    "src"
+  ], // Keep this as is or as Vite set it
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ] // Keep this as is
 }

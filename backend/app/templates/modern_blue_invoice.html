@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>{{ invoice.invoice_type.value | replace('_', ' ') | title if invoice.invoice_type else 'Document' }} - {{ invoice.invoice_number }}</title>
+    <title>{{ invoice.invoice_type.value | replace('_', ' ') | title if invoice.invoice_type else 'Document' }} - {{
+        invoice.invoice_number }}</title>
     <style>
         :root {
             --primary-color: #2563eb;
@@ -45,14 +47,38 @@
             margin: 12mm;
 
             @top-left {
-                {% set header_title = "DOCUMENT" %}
-                {% if invoice.invoice_type.value == "PRO_FORMA" %}
-                    {% set header_title = "Pro Forma Invoice" %}
-                {% elif invoice.invoice_type.value == "COMMERCIAL" %}
-                    {% set header_title = "Commercial Invoice" %}
-                {% elif invoice.invoice_type.value == "PACKING_LIST" %}
-                    {% set header_title = "Packing List" %}
-                {% endif %}
+                    {
+                    % set header_title="DOCUMENT" %
+                }
+
+                    {
+                    % if invoice.invoice_type.value=="PRO_FORMA" %
+                }
+
+                    {
+                    % set header_title="Pro Forma Invoice" %
+                }
+
+                    {
+                    % elif invoice.invoice_type.value=="COMMERCIAL" %
+                }
+
+                    {
+                    % set header_title="Commercial Invoice" %
+                }
+
+                    {
+                    % elif invoice.invoice_type.value=="PACKING_LIST" %
+                }
+
+                    {
+                    % set header_title="Packing List" %
+                }
+
+                    {
+                    % endif %
+                }
+
                 content: "{{ header_title }}";
                 font-family: var(--font-sans);
                 font-size: 14pt;
@@ -116,14 +142,14 @@
             font-size: 24pt;
             font-weight: 800;
             margin: 0 0 8px 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             letter-spacing: -0.5px;
         }
 
         .company-info-left p {
             margin: 2px 0;
             font-size: 9pt;
-            color: rgba(255,255,255,0.9);
+            color: rgba(255, 255, 255, 0.9);
             font-weight: 400;
         }
 
@@ -270,8 +296,13 @@
             vertical-align: top;
         }
 
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
 
         .description-cell {
             font-weight: 500;
@@ -445,16 +476,16 @@
             body {
                 background: white;
             }
-            
+
             .container {
                 box-shadow: none;
                 border-radius: 0;
             }
-            
+
             .items-table tbody tr:hover {
                 background-color: transparent;
             }
-            
+
             .item-images-container img:hover {
                 transform: none;
                 box-shadow: none;
@@ -467,7 +498,7 @@
                 grid-template-columns: 1fr;
                 gap: 15px;
             }
-            
+
             .invoice-details-card {
                 grid-template-columns: 1fr;
                 gap: 15px;
@@ -475,6 +506,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <!-- Header with Gradient Background -->
@@ -483,22 +515,30 @@
                 <div class="company-info-left">
                     <h1 class="company-name">{{ invoice.organization.name }}</h1>
                     <p>{{ invoice.organization.address_line1 or '' }}</p>
-                    {% if invoice.organization.address_line2 %}<p>{{ invoice.organization.address_line2 }}</p>{% endif %}
+                    {% if invoice.organization.address_line2 %}<p>{{ invoice.organization.address_line2 }}</p>{% endif
+                    %}
                     <p>
-                        {{ invoice.organization.city or '' }}{% if invoice.organization.state_province_region %}, {{ invoice.organization.state_province_region }}{% endif %} {{ invoice.organization.zip_code or '' }}
+                        {{ invoice.organization.city or '' }}{% if invoice.organization.state_province_region %}, {{
+                        invoice.organization.state_province_region }}{% endif %} {{ invoice.organization.zip_code or ''
+                        }}
                     </p>
                     <p>{{ invoice.organization.country or '' }}</p>
-                    {% if invoice.organization.contact_phone %}<p class="contact-detail"><strong>Phone:</strong> {{ invoice.organization.contact_phone }}</p>{% endif %}
-                    {% if invoice.organization.contact_email %}<p class="contact-detail"><strong>Email:</strong> {{ invoice.organization.contact_email }}</p>{% endif %}
+                    {% if invoice.organization.contact_phone %}<p class="contact-detail"><strong>Phone:</strong> {{
+                        invoice.organization.contact_phone }}</p>{% endif %}
+                    {% if invoice.organization.contact_email %}<p class="contact-detail"><strong>Email:</strong> {{
+                        invoice.organization.contact_email }}</p>{% endif %}
                 </div>
                 {% if invoice.organization.logo_url %}
                 <div class="logo-area-right">
                     {% if invoice.organization.logo_url.startswith('http') %}
-                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo"
+                        class="logo">
                     {% elif SERVER_HOST %}
-                        <img src="{{ SERVER_HOST }}{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    <img src="{{ SERVER_HOST }}{{ invoice.organization.logo_url }}"
+                        alt="{{ invoice.organization.name }} Logo" class="logo">
                     {% else %}
-                        <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo" class="logo">
+                    <img src="{{ invoice.organization.logo_url }}" alt="{{ invoice.organization.name }} Logo"
+                        class="logo">
                     {% endif %}
                 </div>
                 {% endif %}
@@ -513,7 +553,8 @@
             </div>
             <div class="detail-item">
                 <div class="detail-label">Invoice Date</div>
-                <div class="detail-value">{{ invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '-' }}</div>
+                <div class="detail-value">{{ invoice.invoice_date.strftime('%d %b %Y') if invoice.invoice_date else '-'
+                    }}</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Due Date</div>
@@ -528,14 +569,18 @@
                 <p><strong>{{ invoice.customer.company_name }}</strong></p>
                 {% if invoice.customer.poc_name %}<p>{{ invoice.customer.poc_name }}</p>{% endif %}
                 {% if invoice.customer.email %}<p><strong>Email:</strong> {{ invoice.customer.email }}</p>{% endif %}
-                {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>{% endif %}
+                {% if invoice.customer.phone_number %}<p><strong>Phone:</strong> {{ invoice.customer.phone_number }}</p>
+                {% endif %}
             </div>
             <div class="customer-card">
                 <h3>Billing Address</h3>
                 <p>{{ invoice.customer.billing_address_line1 or '' }}</p>
-                {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{% endif %}
+                {% if invoice.customer.billing_address_line2 %}<p>{{ invoice.customer.billing_address_line2 }}</p>{%
+                endif %}
                 <p>
-                    {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{ invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or '' }}
+                    {{ invoice.customer.billing_city or '' }}{% if invoice.customer.billing_state_province_region %}, {{
+                    invoice.customer.billing_state_province_region }}{% endif %} {{ invoice.customer.billing_zip_code or
+                    '' }}
                 </p>
                 <p>{{ invoice.customer.billing_country or '' }}</p>
             </div>
@@ -550,7 +595,7 @@
                         <th style="width: 40%;">Description</th>
                         {% set unit_header_label = "UNITS" %}
                         {% if invoice.line_items and invoice.line_items[0] and invoice.line_items[0].unit_type %}
-                            {% set unit_header_label = invoice.line_items[0].unit_type | upper %}
+                        {% set unit_header_label = invoice.line_items[0].unit_type | upper %}
                         {% endif %}
                         <th style="width: 10%;" class="text-center">Qty ({{ unit_header_label }})</th>
                         <th style="width: 10%;" class="text-center">Qty (CTNs)</th>
@@ -564,15 +609,20 @@
                         <td class="text-center">{{ loop.index }}</td>
                         <td class="description-cell">
                             {{ item_line.item_description }}
-                            {% if item_line.item_specific_comments %}<small>{{ item_line.item_specific_comments }}</small>{% endif %}
+                            {% if item_line.item_specific_comments %}<small>{{ item_line.item_specific_comments
+                                }}</small>{% endif %}
                         </td>
-                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_units) if item_line.quantity_units is not none else '-' }}</td>
-                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_cartons) if item_line.quantity_cartons is not none else '-' }}</td>
+                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_units) if item_line.quantity_units
+                            is not none else '-' }}</td>
+                        <td class="text-center">{{ "%.0f"|format(item_line.quantity_cartons) if
+                            item_line.quantity_cartons is not none else '-' }}</td>
                         <td class="text-right">
-                            {{ "%.2f"|format(item_line.price) }} 
-                            {% if item_line.currency %}{{ item_line.currency }}{% else %}{{ invoice.currency }}{% endif %}
+                            {{ "%.2f"|format(item_line.price) }}
+                            {% if item_line.currency %}{{ item_line.currency }}{% else %}{{ invoice.currency }}{% endif
+                            %}
                             {% if item_line.price_per_type %}
-                            <small style="display:block; color: var(--text-light);">per {{ item_line.price_per_type.value | lower }}</small>
+                            <small style="display:block; color: var(--text-light);">per {{
+                                item_line.price_per_type.value | lower }}</small>
                             {% endif %}
                         </td>
                         <td class="text-right">{{ "%.2f"|format(item_line.line_total) }} {{ invoice.currency }}</td>
@@ -582,7 +632,8 @@
                         <td colspan="6">
                             <div class="item-images-container">
                                 {% for image in item_line.item.images %}
-                                    <img src="{{ SERVER_HOST }}{{ image.image_url }}" alt="{{ image.alt_text or (item_line.item_description + ' image ' + loop.index|string) }}">
+                                <img src="{{ SERVER_HOST }}{{ image.image_url }}"
+                                    alt="{{ image.alt_text or (item_line.item_description + ' image ' + loop.index|string) }}">
                                 {% endfor %}
                             </div>
                         </td>
@@ -590,7 +641,8 @@
                     {% endif %}
                     {% else %}
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-light);">No line items on this invoice.</td>
+                        <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-light);">No line
+                            items on this invoice.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -604,32 +656,38 @@
                 <div class="totals-body">
                     <div class="total-row">
                         <span class="total-label">Subtotal:</span>
-                        <span class="total-value">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency }}</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.subtotal_amount) }} {{ invoice.currency
+                            }}</span>
                     </div>
                     {% if invoice.tax_percentage is not none and invoice.tax_amount != 0 %}
                     <div class="total-row">
-                        <span class="total-label">Tax {% if invoice.tax_percentage %}({{ "%.2f"|format(invoice.tax_percentage) }}%){% endif %}:</span>
+                        <span class="total-label">Tax {% if invoice.tax_percentage %}({{
+                            "%.2f"|format(invoice.tax_percentage) }}%){% endif %}:</span>
                         <span class="total-value">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</span>
                     </div>
                     {% endif %}
-                    {% if invoice.discount_percentage is not none and invoice.discount_amount != 0 %}
+                    {% if invoice.discount_amount and invoice.discount_amount > 0 %}
                     <div class="total-row">
-                        <span class="total-label">Discount {% if invoice.discount_percentage %}({{ "%.2f"|format(invoice.discount_percentage) }}%){% endif %}:</span>
-                        <span class="total-value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</span>
+                        <span class="total-label">Discount:</span>
+                        <span class="total-value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency
+                            }}</span>
                     </div>
                     {% endif %}
                     <div class="total-row grand-total">
                         <span class="total-label">TOTAL:</span>
-                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency }}</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount) }} {{ invoice.currency
+                            }}</span>
                     </div>
                     {% if invoice.amount_paid and invoice.amount_paid > 0 %}
                     <div class="total-row">
                         <span class="total-label">Amount Paid:</span>
-                        <span class="total-value">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency }}</span>
+                        <span class="total-value">- {{ "%.2f"|format(invoice.amount_paid) }} {{ invoice.currency
+                            }}</span>
                     </div>
                     <div class="total-row balance-due">
                         <span class="total-label">BALANCE DUE:</span>
-                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount - (invoice.amount_paid or 0)) }} {{ invoice.currency }}</span>
+                        <span class="total-value">{{ "%.2f"|format(invoice.total_amount - (invoice.amount_paid or 0)) }}
+                            {{ invoice.currency }}</span>
                     </div>
                     {% endif %}
                 </div>
@@ -637,11 +695,15 @@
         </div>
 
         <!-- Shipping Information -->
-        {% if invoice.invoice_type.value == "COMMERCIAL" and (invoice.container_number or invoice.seal_number or invoice.hs_code or invoice.bl_number) %}
+        {% if invoice.invoice_type.value == "COMMERCIAL" and (invoice.container_number or invoice.seal_number or
+        invoice.hs_code or invoice.bl_number) %}
         <div class="info-block">
             <div class="info-block-header">Shipping Information</div>
             <div class="info-block-content">
-                <p>{% if invoice.container_number %}<strong>Container #:</strong> {{ invoice.container_number }}<br>{% endif %}{% if invoice.seal_number %}<strong>Seal #:</strong> {{ invoice.seal_number }}<br>{% endif %}{% if invoice.hs_code %}<strong>H.S. Code:</strong> {{ invoice.hs_code }}<br>{% endif %}{% if invoice.bl_number %}<strong>B/L Number:</strong> {{ invoice.bl_number }}{% endif %}</p>
+                <p>{% if invoice.container_number %}<strong>Container #:</strong> {{ invoice.container_number }}<br>{%
+                    endif %}{% if invoice.seal_number %}<strong>Seal #:</strong> {{ invoice.seal_number }}<br>{% endif
+                    %}{% if invoice.hs_code %}<strong>H.S. Code:</strong> {{ invoice.hs_code }}<br>{% endif %}{% if
+                    invoice.bl_number %}<strong>B/L Number:</strong> {{ invoice.bl_number }}{% endif %}</p>
             </div>
         </div>
         {% endif %}
@@ -662,4 +724,5 @@
         </div>
     </div>
 </body>
+
 </html>

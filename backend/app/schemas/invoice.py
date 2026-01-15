@@ -22,6 +22,10 @@ class PricePerTypeEnum(str, Enum):
     UNIT = "UNIT"
     CARTON = "CARTON"
 
+class DiscountTypeEnum(str, Enum):
+    PERCENTAGE = "PERCENTAGE"
+    FIXED = "FIXED"
+
 # --- InvoiceItem Schemas ---
 class InvoiceItemBase(BaseModel):
     item_description: str 
@@ -80,7 +84,10 @@ class InvoiceBase(BaseModel):
     currency: str = Field(default="USD", max_length=3, min_length=3)
     
     subtotal_amount: Optional[float] = Field(default=0.0, ge=0)
-    tax_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    
+    discount_type: DiscountTypeEnum = DiscountTypeEnum.PERCENTAGE
+
+    tax_percentage: Optional[float] = Field(default=None, ge=0, allow_none=True)
     tax_amount: Optional[float] = Field(default=0.0, ge=0)
     discount_percentage: Optional[float] = Field(default=None, ge=0, le=100)
     discount_amount: Optional[float] = Field(default=0.0, ge=0)
@@ -109,6 +116,7 @@ class InvoiceCreate(InvoiceBase):
     # they won't be required in the payload unless explicitly set.
     # The exclude in model_dump in CRUD is still a good safety.
     status: InvoiceStatusEnum = InvoiceStatusEnum.DRAFT # Enforce draft on creation
+    discount_type: DiscountTypeEnum = DiscountTypeEnum.PERCENTAGE
     subtotal_amount: Optional[float] = Field(None, exclude=True) 
     tax_amount: Optional[float] = Field(None, exclude=True)
     total_amount: Optional[float] = Field(None, exclude=True)
@@ -134,8 +142,11 @@ class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
     invoice_type: Optional[InvoiceTypeEnum] = None
     status: Optional[InvoiceStatusEnum] = None
+    status: Optional[InvoiceStatusEnum] = None
     currency: Optional[str] = Field(default=None, max_length=3, min_length=3, allow_none=True)
     
+    discount_type: Optional[DiscountTypeEnum] = None
+
     customer_id: Optional[uuid.UUID] = None 
     
     subtotal_amount: Optional[float] = Field(default=None, ge=0, allow_none=True)

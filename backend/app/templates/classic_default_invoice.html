@@ -306,9 +306,9 @@
                         <td class="value">{{ "%.2f"|format(invoice.tax_amount) }} {{ invoice.currency }}</td>
                     </tr>
                     {% endif %}
-                    {% if invoice.discount_percentage is not none and invoice.discount_amount != 0 %}
+                    {% if invoice.discount_amount and invoice.discount_amount > 0 %}
                     <tr>
-                        <td class="label">Discount {% if invoice.discount_percentage %}({{ "%.2f"|format(invoice.discount_percentage) }}%){% endif %}:</td>
+                        <td class="label">Discount:</td>
                         <td class="value">- {{ "%.2f"|format(invoice.discount_amount) }} {{ invoice.currency }}</td>
                     </tr>
                     {% endif %}

@@ -50,7 +50,7 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // State for image deletion dialog
   const [isDeleteImageDialogOpen, setIsDeleteImageDialogOpen] = useState(false);
@@ -67,9 +67,9 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
         default_unit: initialData.default_unit || '',
       });
       setExistingImages(initialData.images || []);
-      setNewImageFiles([]); 
+      setNewImageFiles([]);
       setImagePreviews([]);
-    } else { 
+    } else {
       setFormData({ name: '', description: '', default_price: '', default_unit: '' });
       setExistingImages([]);
       setNewImageFiles([]);
@@ -83,19 +83,19 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-     if (event.target.files) {
-         const filesArray = Array.from(event.target.files);
-         setNewImageFiles(prevFiles => [...prevFiles, ...filesArray]);
-         const newPreviews = filesArray.map(file => URL.createObjectURL(file));
-         setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
-     }
+    if (event.target.files) {
+      const filesArray = Array.from(event.target.files);
+      setNewImageFiles(prevFiles => [...prevFiles, ...filesArray]);
+      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
+    }
   };
 
   const removeNewImage = (index: number) => {
-     const removedPreview = imagePreviews[index];
-     setNewImageFiles(prev => prev.filter((_, i) => i !== index));
-     setImagePreviews(prev => prev.filter((_, i) => i !== index));
-     URL.revokeObjectURL(removedPreview); 
+    const removedPreview = imagePreviews[index];
+    setNewImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    URL.revokeObjectURL(removedPreview);
   };
 
   // Opens the confirmation dialog
@@ -106,27 +106,27 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
 
   // Actual deletion logic, called from AlertDialog
   const confirmDeleteExistingImage = async () => {
-     if (!imageToDelete || !initialData?.id) return;
-     
-     setIsDeletingImage(true);
-     try {
-         await apiClient.delete(`/items/images/${imageToDelete.id}`);
-         setExistingImages(prev => prev.filter(img => img.id !== imageToDelete.id));
-         toast.success("Image deleted successfully.");
-     } catch (err: any) {
-         console.error("Failed to delete image:", err);
-         toast.error(err.response?.data?.detail || "Failed to delete image.");
-     } finally {
-         setIsDeletingImage(false);
-         setIsDeleteImageDialogOpen(false);
-         setImageToDelete(null);
-     }
+    if (!imageToDelete || !initialData?.id) return;
+
+    setIsDeletingImage(true);
+    try {
+      await apiClient.delete(`/items/images/${imageToDelete.id}`);
+      setExistingImages(prev => prev.filter(img => img.id !== imageToDelete.id));
+      toast.success("Image deleted successfully.");
+    } catch (err: any) {
+      console.error("Failed to delete image:", err);
+      toast.error(err.response?.data?.detail || "Failed to delete image.");
+    } finally {
+      setIsDeletingImage(false);
+      setIsDeleteImageDialogOpen(false);
+      setImageToDelete(null);
+    }
   };
-  
+
   useEffect(() => {
-     return () => {
-         imagePreviews.forEach(url => URL.revokeObjectURL(url));
-     };
+    return () => {
+      imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    };
   }, [imagePreviews]);
 
 
@@ -140,11 +140,11 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
     setError(null);
 
     const priceAsNumber = formData.default_price ? parseFloat(String(formData.default_price)) : undefined;
-     if (formData.default_price && (isNaN(priceAsNumber) || (priceAsNumber !== undefined && priceAsNumber < 0))) {
-          setError("Default price must be a non-negative number.");
-          setIsSubmitting(false);
-          return;
-     }
+    if (formData.default_price && (priceAsNumber === undefined || isNaN(priceAsNumber) || priceAsNumber < 0)) {
+      setError("Default price must be a non-negative number.");
+      setIsSubmitting(false);
+      return;
+    }
 
     const itemPayload = {
       name: formData.name,
@@ -153,7 +153,7 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
       default_unit: formData.default_unit || undefined,
       ...(mode === 'create' && activeOrganization?.id && { organization_id: activeOrganization.id }),
     };
-    
+
     try {
       let savedItem: Item;
       if (mode === 'edit' && initialData?.id) {
@@ -170,13 +170,13 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
         newImageFiles.forEach(file => {
           imageFormData.append('files', file);
         });
-        
+
         const imageUploadResponse = await apiClient.post<Item>(`/items/${savedItem.id}/images`, imageFormData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        savedItem = imageUploadResponse.data; 
+        savedItem = imageUploadResponse.data;
       }
-      
+
       toast.success(`Item "${savedItem.name}" ${mode === 'create' ? 'created' : 'updated'} successfully!`);
       onSuccess(savedItem);
 
@@ -194,88 +194,88 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-           <Label htmlFor="name">Item Name</Label>
-           <Input id="name" name="name" value={formData.name} onChange={handleChange} required disabled={isSubmitting} className="mt-1" />
+          <Label htmlFor="name">Item Name</Label>
+          <Input id="name" name="name" value={formData.name} onChange={handleChange} required disabled={isSubmitting} className="mt-1" />
         </div>
         <div>
-           <Label htmlFor="description">Description</Label>
-           <Textarea id="description" name="description" value={formData.description} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
+          <Label htmlFor="description">Description</Label>
+          <Textarea id="description" name="description" value={formData.description} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
         </div>
         <div>
-           <Label htmlFor="default_price">Default Price</Label>
-           <Input id="default_price" name="default_price" type="number" step="0.01" min="0" value={formData.default_price} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
+          <Label htmlFor="default_price">Default Price</Label>
+          <Input id="default_price" name="default_price" type="number" step="0.01" min="0" value={formData.default_price} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
         </div>
         <div>
-           <Label htmlFor="default_unit">Default Unit (e.g., piece, kg)</Label>
-           <Input id="default_unit" name="default_unit" value={formData.default_unit} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
+          <Label htmlFor="default_unit">Default Unit (e.g., piece, kg)</Label>
+          <Input id="default_unit" name="default_unit" value={formData.default_unit} onChange={handleChange} disabled={isSubmitting} className="mt-1" />
         </div>
 
         <div className="space-y-2">
-           <Label>Images</Label>
-           {existingImages.length > 0 && (
-               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-4">
-                   {existingImages.map((img) => (
-                       <div key={img.id} className="relative group border rounded-md p-1">
-                           <img src={getFullStaticUrl(img.image_url)} alt={img.alt_text || `Item image ${img.order_index + 1}`} className="w-full h-24 object-cover rounded" />
-                           <Button
-                               type="button"
-                               variant="destructive"
-                               size="icon"
-                               className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                               onClick={() => openDeleteImageConfirmDialog(img)} // Open dialog
-                               disabled={isSubmitting || isDeletingImage}
-                           >
-                               <Trash2Icon className="h-3.5 w-3.5" />
-                           </Button>
-                       </div>
-                   ))}
-               </div>
-           )}
+          <Label>Images</Label>
+          {existingImages.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-4">
+              {existingImages.map((img) => (
+                <div key={img.id} className="relative group border rounded-md p-1">
+                  <img src={getFullStaticUrl(img.image_url)} alt={img.alt_text || `Item image ${img.order_index + 1}`} className="w-full h-24 object-cover rounded" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    onClick={() => openDeleteImageConfirmDialog(img)} // Open dialog
+                    disabled={isSubmitting || isDeletingImage}
+                  >
+                    <Trash2Icon className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
 
-           {imagePreviews.length > 0 && (
-               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-2">
-                   {imagePreviews.map((previewUrl, index) => (
-                       <div key={previewUrl} className="relative group border rounded-md p-1">
-                           <img src={previewUrl} alt={`New image preview ${index + 1}`} className="w-full h-24 object-cover rounded" />
-                           <Button
-                               type="button"
-                               variant="destructive"
-                               size="icon"
-                               className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                               onClick={() => removeNewImage(index)}
-                               disabled={isSubmitting}
-                           >
-                               <XCircleIcon className="h-4 w-4" />
-                           </Button>
-                       </div>
-                   ))}
-               </div>
-           )}
+          {imagePreviews.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-2">
+              {imagePreviews.map((previewUrl, index) => (
+                <div key={previewUrl} className="relative group border rounded-md p-1">
+                  <img src={previewUrl} alt={`New image preview ${index + 1}`} className="w-full h-24 object-cover rounded" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    onClick={() => removeNewImage(index)}
+                    disabled={isSubmitting}
+                  >
+                    <XCircleIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
 
-           <Input
-               id="imageFiles"
-               name="imageFiles"
-               type="file"
-               multiple
-               accept="image/png, image/jpeg, image/gif, image/webp"
-               onChange={handleFileChange}
-               className="hidden" 
-               ref={fileInputRef}
-               disabled={isSubmitting}
-           />
-           <Button 
-               type="button" 
-               variant="outline" 
-               onClick={() => fileInputRef.current?.click()}
-               disabled={isSubmitting}
-               className="w-full"
-           >
-               <ImagePlusIcon className="mr-2 h-4 w-4" /> Add Images
-           </Button>
+          <Input
+            id="imageFiles"
+            name="imageFiles"
+            type="file"
+            multiple
+            accept="image/png, image/jpeg, image/gif, image/webp"
+            onChange={handleFileChange}
+            className="hidden"
+            ref={fileInputRef}
+            disabled={isSubmitting}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSubmitting}
+            className="w-full"
+          >
+            <ImagePlusIcon className="mr-2 h-4 w-4" /> Add Images
+          </Button>
         </div>
 
         {error && <p className="text-sm text-destructive text-center">{error}</p>}
-        
+
         <div className="flex justify-end space-x-3 pt-6">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>
@@ -294,13 +294,13 @@ const ItemForm = ({ mode, initialData, onSuccess, onCancel }: ItemFormProps) => 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {setImageToDelete(null); setIsDeleteImageDialogOpen(false);}} disabled={isDeletingImage}>
+            <AlertDialogCancel onClick={() => { setImageToDelete(null); setIsDeleteImageDialogOpen(false); }} disabled={isDeletingImage}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction 
-                onClick={confirmDeleteExistingImage} 
-                disabled={isDeletingImage}
-                className="bg-destructive hover:bg-destructive/90 text-white"
+            <AlertDialogAction
+              onClick={confirmDeleteExistingImage}
+              disabled={isDeletingImage}
+              className="bg-destructive hover:bg-destructive/90 text-white"
             >
               {isDeletingImage ? "Deleting..." : "Yes, delete image"}
             </AlertDialogAction>

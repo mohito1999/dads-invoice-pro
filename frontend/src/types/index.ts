@@ -10,7 +10,7 @@ export interface InvoiceTemplateSummary {
     is_system_default: boolean;
     order_index: number;
 }
-  
+
 export interface InvoiceTemplate extends InvoiceTemplateSummary {
     template_file_path: string;
 }
@@ -37,17 +37,17 @@ export interface Organization extends OrganizationSummary {
 
 // MODIFIED OrganizationFormData
 export interface OrganizationFormData {
-  name: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  state_province_region?: string;
-  zip_code?: string;
-  country?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  selected_invoice_template_id?: string | null;
-  // logo_url is removed, will be handled by File state in the form
+    name: string;
+    address_line1?: string;
+    address_line2?: string;
+    city?: string;
+    state_province_region?: string;
+    zip_code?: string;
+    country?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    selected_invoice_template_id?: string | null;
+    // logo_url is removed, will be handled by File state in the form
 }
 
 // ... (rest of your types/index.ts file remains the same) ...
@@ -62,54 +62,54 @@ export interface UserProfile {
 
 // --- Customer Types ---
 export interface CustomerSummary {
-  id: string;
-  company_name: string;
-  poc_name?: string | null;
-  email?: string | null;
+    id: string;
+    company_name: string;
+    poc_name?: string | null;
+    email?: string | null;
 }
 
 export interface Customer extends CustomerSummary {
-  organization_id: string;
-  billing_address_line1?: string | null;
-  billing_address_line2?: string | null;
-  billing_city?: string | null;
-  billing_state_province_region?: string | null;
-  billing_zip_code?: string | null;
-  billing_country?: string | null;
-  phone_number?: string | null;
+    organization_id: string;
+    billing_address_line1?: string | null;
+    billing_address_line2?: string | null;
+    billing_city?: string | null;
+    billing_state_province_region?: string | null;
+    billing_zip_code?: string | null;
+    billing_country?: string | null;
+    phone_number?: string | null;
 }
 
 // --- Item Types ---
-export interface ItemImage { 
-  id: string;
-  image_url: string;
-  order_index: number;
-  alt_text?: string | null; 
+export interface ItemImage {
+    id: string;
+    image_url: string;
+    order_index: number;
+    alt_text?: string | null;
 }
 
-export interface ItemSummary { 
+export interface ItemSummary {
     id: string;
     name: string;
-    description?: string | null; 
+    description?: string | null;
     default_price?: number | null;
     default_unit?: string | null;
-    image_url?: string | null; 
+    image_url?: string | null;
 }
-  
-export interface Item { 
+
+export interface Item {
     id: string;
     organization_id: string;
     name: string;
     description?: string | null;
     default_price?: number | null;
     default_unit?: string | null;
-    images: ItemImage[]; 
+    images: ItemImage[];
 }
 
-export interface ItemFormData { 
+export interface ItemFormData {
     name: string;
     description?: string;
-    default_price?: number | string; 
+    default_price?: number | string;
     default_unit?: string;
 }
 
@@ -134,29 +134,34 @@ export enum PricePerTypeEnum {
     UNIT = "UNIT",
     CARTON = "CARTON",
 }
-  
+
+export enum DiscountTypeEnum {
+    PERCENTAGE = "PERCENTAGE",
+    FIXED = "FIXED",
+}
+
 // --- Invoice Item Types ---
 export interface InvoiceItem extends Omit<InvoiceItemFormData, '_temp_id' | 'price' | 'quantity_cartons' | 'quantity_units' | 'net_weight_kgs' | 'gross_weight_kgs' | 'measurement_cbm'> {
-    id: string; 
+    id: string;
     invoice_id: string;
     line_total: number;
-    price: number; 
-    quantity_cartons?: number | null; 
-    quantity_units?: number | null;   
+    price: number;
+    quantity_cartons?: number | null;
+    quantity_units?: number | null;
     net_weight_kgs?: number | null;
     gross_weight_kgs?: number | null;
     measurement_cbm?: number | null;
-  }
-  
-export interface InvoiceItemFormData { 
-    id?: string; 
-    _temp_id?: string; 
-    item_id?: string | null; 
+}
+
+export interface InvoiceItemFormData {
+    id?: string;
+    _temp_id?: string;
+    item_id?: string | null;
     item_description: string;
-    quantity_cartons?: number | string | null; 
-    quantity_units?: number | string | null;   
+    quantity_cartons?: number | string | null;
+    quantity_units?: number | string | null;
     unit_type?: string | null;
-    price: number | string; 
+    price: number | string;
     price_per_type: PricePerTypeEnum;
     currency: string;
     item_specific_comments?: string | null;
@@ -164,55 +169,58 @@ export interface InvoiceItemFormData {
     gross_weight_kgs?: number | string | null;
     measurement_cbm?: number | string | null;
 }
-  
+
 // --- Invoice Types ---
-export interface InvoiceSummary { 
+export interface InvoiceSummary {
     id: string;
     invoice_number: string;
-    invoice_date: string; 
-    customer_company_name?: string | null; 
+    invoice_date: string;
+    customer_company_name?: string | null;
     total_amount: number;
     currency: string;
     status: InvoiceStatusEnum;
     invoice_type: InvoiceTypeEnum;
 }
-  
+
 export interface Invoice {
     id: string;
     organization_id: string;
     customer_id: string;
-    user_id: string; 
+    user_id: string;
     invoice_number: string;
-    invoice_date: string; 
-    due_date?: string | null; 
+    invoice_date: string;
+    due_date?: string | null;
     invoice_type: InvoiceTypeEnum;
     status: InvoiceStatusEnum;
     currency: string;
     subtotal_amount: number;
     tax_percentage?: number | null;
     tax_amount: number;
+    discount_type: DiscountTypeEnum;
     discount_percentage?: number | null;
     discount_amount: number;
     total_amount: number;
     amount_paid: number;
     comments_notes?: string | null;
-    pdf_url?: string | null; 
+    pdf_url?: string | null;
     line_items: InvoiceItem[];
-    created_at: string; 
-    updated_at: string; 
+    created_at: string;
+    updated_at: string;
     container_number?: string | null;
     seal_number?: string | null;
     hs_code?: string | null;
     bl_number?: string | null;
 }
 
-export interface InvoiceCreateData extends Omit<Invoice, 
-    'id' | 'user_id' | 'pdf_url' | 'created_at' | 'updated_at' | 
-    'subtotal_amount' | 'tax_amount' | 'total_amount' | 'amount_paid' | 'line_items'
+export interface InvoiceCreateData extends Omit<Invoice,
+    'id' | 'user_id' | 'pdf_url' | 'created_at' | 'updated_at' |
+    'subtotal_amount' | 'tax_amount' | 'total_amount' | 'amount_paid' | 'line_items' | 'discount_amount'
 > {
-    organization_id: string; 
-    line_items: Omit<InvoiceItemFormData, 'id' | '_temp_id'>[]; 
+    organization_id: string;
+    line_items: Omit<InvoiceItemFormData, 'id' | '_temp_id'>[];
+    discount_amount?: number | null; // Manually allow if needed for FIXED
 }
+
 
 export interface InvoiceUpdateData extends Partial<Omit<InvoiceCreateData, 'organization_id'>> {
     line_items?: Omit<InvoiceItemFormData, '_temp_id'>[];

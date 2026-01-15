@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import logging
+import sys
 from fastapi import Request
 logger = logging.getLogger(__name__) # Get a logger instance
 
@@ -62,7 +63,53 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 async def read_root():
+    # If packaged, this route might be overshadowed by the catch-all below, 
+    # but good to keep for API-only mode.
     return {"message": f"Welcome to {settings.PROJECT_NAME}!"}
+
+# --- STATIC FILE SERVING FOR PACKAGED APP ---
+import os
+from fastapi.responses import FileResponse
+
+# Check if we are running in a packaged environment or if dist folder exists adjacent
+IS_PACKAGED = os.environ.get("IS_PACKAGED_APP") == "True"
+
+# In PyInstaller, sys._MEIPASS is the temp folder where bundles are extracted
+if getattr(sys, 'frozen', False):
+    # Running as compiled exe
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    # Running as script
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent # backend/
+
+FRONTEND_DIST = BASE_DIR / "frontend_dist" # We will rename 'dist' to 'frontend_dist' during build to avoid confusion
+
+if IS_PACKAGED or (FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists()):
+    logger.info(f"Serving frontend from {FRONTEND_DIST}")
+    
+    # Mount assets (js, css, etc.)
+    # Vite puts assets in dist/assets
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    # Catch-all for React Router
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        # Allow API routes to pass through (they are already matched above if defined)
+        if full_path.startswith("api") or full_path.startswith("static"):
+             # If it fell through to here, it means no specific API route matched.
+             # Return usage 404 for API, or let it fall to 404.
+             # But usually starlette routing handles specific routes first.
+             pass 
+
+        # Check if specific file exists first (e.g. favicon.ico)
+        file_path = FRONTEND_DIST / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+
+        # Otherwise serve index.html
+        return FileResponse(FRONTEND_DIST / "index.html")
+# --------------------------------------------
 
 @app.get("/health", tags=["Health"])
 async def health_check():
