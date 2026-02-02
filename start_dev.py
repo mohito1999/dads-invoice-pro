@@ -42,8 +42,14 @@ backend_dir = os.path.join(project_root, "backend")
 uvicorn_executable = os.path.join(backend_dir, "venv/bin/uvicorn")
 backend_cmd = [uvicorn_executable, "app.main:app", "--reload"]
 
+# Add Homebrew lib path for WeasyPrint (macOS)
+env = os.environ.copy()
+if os.path.exists("/opt/homebrew/lib"):
+    current_dyld = env.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    env["DYLD_FALLBACK_LIBRARY_PATH"] = f"/opt/homebrew/lib:{current_dyld}"
+
 try:
-    backend_process = subprocess.Popen(backend_cmd, cwd=backend_dir)
+    backend_process = subprocess.Popen(backend_cmd, cwd=backend_dir, env=env)
     processes.append(backend_process)
     print(f"Backend server started with PID: {backend_process.pid}")
 except FileNotFoundError:

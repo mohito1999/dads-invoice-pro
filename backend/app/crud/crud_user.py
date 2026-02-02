@@ -1,19 +1,21 @@
+from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import uuid
 from app.models.user import User as UserModel # Alias to avoid name clash
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash, verify_password # Our security utils
+from typing import Optional
 
 
-async def get_user(db: AsyncSession, user_id: uuid.UUID) -> UserModel | None:
+async def get_user(db: AsyncSession, user_id: uuid.UUID) -> Optional[UserModel]:
     """
     Get a user by their ID.
     """
     result = await db.execute(select(UserModel).filter(UserModel.id == user_id))
     return result.scalars().first()
 
-async def get_user_by_email(db: AsyncSession, email: str) -> UserModel | None:
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]:
     """
     Get a user by their email address.
     """
@@ -80,7 +82,7 @@ async def update_user(
 
 async def authenticate_user(
     db: AsyncSession, *, email: str, password: str
-) -> UserModel | None:
+) -> Optional[UserModel]:
     """
     Authenticate a user by email and password.
     Returns the user object if authentication is successful, None otherwise.

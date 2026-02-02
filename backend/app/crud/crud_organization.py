@@ -1,21 +1,23 @@
+from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 # from sqlalchemy.orm import selectinload # For eager loading related data if needed later
 import uuid
+from typing import Optional
 from pydantic import HttpUrl
 
 from app.models.organization import Organization as OrganizationModel
 from app.models.user import User as UserModel # Import User model
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 
-async def get_organization(db: AsyncSession, org_id: uuid.UUID) -> OrganizationModel | None:
+async def get_organization(db: AsyncSession, org_id: uuid.UUID) -> Optional[OrganizationModel]:
     """
     Get a single organization by its ID.
     """
     result = await db.execute(select(OrganizationModel).filter(OrganizationModel.id == org_id))
     return result.scalars().first()
 
-async def get_organization_by_name_for_user(db: AsyncSession, name: str, user_id: uuid.UUID) -> OrganizationModel | None:
+async def get_organization_by_name_for_user(db: AsyncSession, name: str, user_id: uuid.UUID) -> Optional[OrganizationModel]:
     """
     Get a single organization by its name for a specific user.
     """

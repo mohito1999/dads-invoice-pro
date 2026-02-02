@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_ # For combining filter conditions
@@ -5,8 +6,9 @@ import uuid
 
 from app.models.customer import Customer as CustomerModel # Alias
 from app.schemas.customer import CustomerCreate, CustomerUpdate
+from typing import Optional
 
-async def get_customer(db: AsyncSession, customer_id: uuid.UUID) -> CustomerModel | None:
+async def get_customer(db: AsyncSession, customer_id: uuid.UUID) -> Optional[CustomerModel]:
     """
     Get a single customer by its ID.
     """
@@ -15,7 +17,7 @@ async def get_customer(db: AsyncSession, customer_id: uuid.UUID) -> CustomerMode
 
 async def get_customer_by_company_name_for_org(
     db: AsyncSession, *, company_name: str, organization_id: uuid.UUID
-) -> CustomerModel | None:
+) -> Optional[CustomerModel]:
     """
     Get a customer by company name within a specific organization.
     """
